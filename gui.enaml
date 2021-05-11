@@ -1,0 +1,227 @@
+from enaml.application import deferred_call
+from enaml.core.api import Looper
+from enaml.layout.api import align, hbox, InsertTab, spacer, vbox
+from enaml.stdlib.fields import FloatField
+from enaml.stdlib.message_box import question
+from enaml.widgets.api import Action, ButtonGroup, CheckBox, Container, DockArea, DockItem, HGroup, Label, MainWindow, Menu, MenuBar, MPLCanvas, ObjectCombo, PushButton, Slider
+
+
+def bind(figure, presenter):
+    figure.canvas.mpl_connect('key_press_event', lambda e: presenter.key_press(e))
+    figure.canvas.mpl_connect('button_press_event', lambda e: presenter.button_press(e))
+    figure.canvas.mpl_connect('button_release_event', lambda e: presenter.button_release(e))
+    figure.canvas.mpl_connect('scroll_event', lambda e: presenter.scroll(e))
+    figure.canvas.mpl_connect('motion_notify_event', lambda e: presenter.motion(e))
+
+
+def add_dock_item(dock_area, presenter):
+    items = dock_area.dock_items()
+    n_items = len(items)
+    target = items[-1].name if n_items else ''
+
+    item = MPLDockItem(dock_area, name='dock_{}'.format(n_items), presenter=presenter)
+    op = InsertTab(item=item.name, target=target)
+    dock_area.update_layout(op)
+
+
+CELLS = ['IHC', 'OHC1', 'OHC2', 'OHC3']
+
+
+enamldef MPLDockItem(DockItem):
+
+    attr presenter
+    closable = False
+
+    title << 'Piece {} (editing {})'.format(presenter.piece.piece, presenter.interaction_mode)
+
+    Container: container:
+        constraints = [
+            vbox(
+                hbox(display_label, display_channel, display_as_label,
+                     display_mode, z_slice_number_label, z_slice,
+                     display_apply, highlight_selected),
+                hbox(mode_label, mode_buttons, submode_buttons, spacer),
+                hbox(action_label, action_clear_spiral, action_guess_cells,
+                     action_clear_cells, spacer, spacing=0),
+                action_copy_spiral,
+                canvas,
+            ),
+            align('v_center', display_label, display_channel, display_as_label,
+                  display_mode, z_slice_number_label, z_slice, display_apply,
+                  highlight_selected),
+            align('v_center', mode_label, mode_buttons),
+            align('v_center', action_label, action_clear_spiral,
+                  action_guess_cells, action_clear_cells),
+            align('left', display_label, mode_label, action_label),
+            align('left', display_channel, mode_buttons, action_clear_spiral,
+                  action_copy_spiral),
+            submode_buttons.children[0].width == mode_buttons.children[0].width,
+        ]
+
+        Label: display_label:
+            text = 'Display'
+
+        ObjectCombo: display_channel:
+            items = ['All', 'CtBP2', 'MyosinVIIa']
+            selected << presenter.current_artist.display_channel
+            selected ::
+                presenter.set_display_channel(selected, display_apply.checked)
+
+        Label: display_as_label:
+            text = 'as'
+
+        ObjectCombo: display_mode:
+            items = ['projection', 'slice']
+            selected << presenter.current_artist.display_mode
+            selected ::
+                presenter.set_display_mode(selected, display_apply.checked)
+
+        Label: z_slice_number_label:
+            text = 'number'
+            enabled << display_mode.selected == 'slice'
+
+        Slider: z_slice:
+            enabled << display_mode.selected == 'slice'
+            tick_interval = 1
+            value << presenter.current_artist.z_slice
+            value ::
+                presenter.set_z_slice(value, False)
+            minimum << presenter.current_artist.z_slice_min
+            maximum << presenter.current_artist.z_slice_max
+
+        PushButton: display_apply:
+            text = 'Apply to all tiles'
+            checkable = True
+            clicked ::
+                if checked:
+                    presenter.set_display_mode(display_mode.selected, True)
+                    presenter.set_display_channel(display_channel.selected, True)
+
+        PushButton: highlight_selected:
+            text = 'Highlight selected'
+            checkable = True
+            checked := presenter.highlight_selected
+
+        ButtonGroup: mode_group:
+            pass
+
+        ButtonGroup: submode_group:
+            pass
+
+        Label: mode_label:
+            text << 'Edit'
+
+        HGroup: mode_buttons:
+            padding = 0
+            spacing = 0
+            Looper:
+                iterable = ['tiles'] + CELLS
+                PushButton:
+                    text = loop_item
+                    group = mode_group
+                    checkable = True
+                    checked << loop_item == presenter.interaction_mode
+                    checked ::
+                        presenter.interaction_mode = loop_item
+
+        HGroup: submode_buttons:
+            padding = 0
+            spacing = 0
+            Looper:
+                iterable = ['spiral', 'cells']
+                PushButton:
+                    enabled << presenter.interaction_mode != 'tiles'
+                    text = loop_item
+                    group = submode_group
+                    checkable = True
+                    checked << loop_item == presenter.interaction_submode
+                    checked ::
+                        presenter.interaction_submode = loop_item
+
+        Label: action_label:
+            text = 'Actions'
+
+        PushButton: action_clear_spiral:
+            text = 'Clear spiral'
+            enabled << presenter.current_spiral_artist is not None and presenter.current_spiral_artist.has_nodes
+            clicked ::
+                button = question(self, 'Confirm action', 'Are you sure you want to remove the current spiral?')
+                if button.text == 'Yes':
+                    presenter.action_clear_spiral()
+
+        PushButton: action_guess_cells:
+            text = 'Find cells'
+            enabled << presenter.current_spiral_artist is not None and presenter.current_spiral_artist.has_spline
+            clicked ::
+                button = question(self, 'Confirm action', 'Are you sure you want to guess the cells?\nThis will remove any previous cells you have marked.')
+                if button.text == 'Yes':
+                    presenter.action_guess_cells()
+
+        PushButton: action_clear_cells:
+            text = 'Clear all cells'
+            enabled << presenter.current_cells_artist is not None and presenter.current_cells_artist.has_nodes
+            clicked ::
+                button = question(self, 'Confirm action', 'Are you sure you want to remove the current cells?')
+                if button.text == 'Yes':
+                    presenter.action_clear_cells()
+
+        HGroup: action_copy_spiral:
+            padding = 0
+            align_widths = False
+            trailing_spacer = spacer(0)
+            enabled << presenter.current_spiral_artist is not None and presenter.current_spiral_artist.has_spline
+            Label:
+                text = 'Copy spiral to'
+            ObjectCombo: to_spiral:
+                items << [c for c in CELLS if c != presenter.interaction_mode]
+            Label:
+                text = 'and expand by'
+            FloatField: distance:
+                value = 5.0
+            Label:
+                text = 'μm'
+            PushButton:
+                text = 'update'
+                clicked ::
+                    button = question(self, 'Confirm action', f'Are you sure you want to overwrite the {to_spiral.selected} spiral?')
+                    if button.text == 'Yes':
+                        presenter.action_clone_spiral(to_spiral.selected, distance.value * 1e-6)
+                        presenter.point_artists[to_spiral.selected, 'spiral'].visible = True
+                        presenter.redraw()
+
+        MPLCanvas: canvas:
+            figure << presenter.figure
+            toolbar_visible = True
+            initialized ::
+                deferred_call(bind, figure, presenter)
+
+
+enamldef CochleagramWindow(MainWindow): window:
+
+    initial_size = (900, 900)
+    title = 'Cochelogram'
+
+    attr presenters
+
+    MenuBar:
+        Menu:
+            title = '&File'
+            Action:
+                text = 'Save analysis\tCtrl+S'
+                triggered ::
+                    for presenter in presenters:
+                        presenter.save_state()
+
+            Action:
+                text = 'Load analysis\tCtrl+L'
+                triggered ::
+                    for presenter in presenters:
+                        presenter.load_state()
+
+    initialized ::
+        for presenter in presenters:
+            deferred_call(add_dock_item, workspace, presenter)
+
+    Container:
+        DockArea: workspace:
+            name = 'dock_area'
