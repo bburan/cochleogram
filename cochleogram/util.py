@@ -59,12 +59,12 @@ def shortest_path(x, y, i=0):
     return list(zip(*path))
 
 
-def load_data(filename, zoom=1, reload=False):
+def load_data(filename, max_xy=512, reload=False):
     filename = Path(filename)
     cache_filename = (
         filename.parent
         / "processed"
-        / f"zoom_{zoom}"
+        / f"max_xy_{max_xy}"
         / filename.with_suffix(".pkl").name
     )
     if not reload and cache_filename.exists():
@@ -139,9 +139,10 @@ def load_data(filename, zoom=1, reload=False):
 
     # First, do the zoom. This is the best time to handle it before we do
     # additional manipulations.
-    if zoom != 1:
-        img = np.concatenate([ndimage.zoom(i, zoom)[np.newaxis] for i in img])
-        info["scaling"] /= zoom
+    zoom = max_xy / max(x_pixels, y_pixels)
+    if zoom < 1:
+        img = np.concatenate([ndimage.zoom(i, (1, zoom, zoom))[np.newaxis] for i in img])
+        info["scaling"][:2] /= zoom
 
     # Initial ordering is czyx
     #                     0123

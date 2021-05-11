@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from atom.api import Atom, Dict, Event, Float, Int, List, Typed
 import numpy as np
 from scipy import interpolate
 from scipy import ndimage
@@ -9,7 +10,13 @@ from raster_geometry import sphere
 from cochleogram import util
 
 
-class Points:
+class Points(Atom):
+
+    x = List()
+    y = List()
+    i = Int()
+    updated = Event()
+
     def __init__(self, x=None, y=None, i=0):
         self.x = [] if x is None else x
         self.y = [] if y is None else y
@@ -69,10 +76,12 @@ class Points:
     def set_nodes(self, x, y):
         self.x = list(x)
         self.y = list(y)
+        self.updated = True
 
     def add_node(self, x, y):
         self.x.append(x)
         self.y.append(y)
+        self.updated = True
         return True
 
     def remove_node(self, x, y, hit_threshold=10):
@@ -83,6 +92,7 @@ class Points:
         if d[i] < hit_threshold:
             self.x.pop(i)
             self.y.pop(i)
+            self.updated = True
             return True
         return False
 
@@ -97,9 +107,17 @@ class Points:
         self.x = state["x"]
         self.y = state["y"]
         self.i = state["i"]
+        self.updated = True
 
 
-class Tile:
+class Tile(Atom):
+
+    info = Dict()
+    image = Typed(np.ndarray)
+    source = Typed(Path)
+    extent = List()
+    scaling = Float()
+
     def __init__(self, info, image, source):
         self.info = info
         self.image = image
@@ -108,7 +126,7 @@ class Tile:
         yub = self.info["upper"][1]
         xlb = self.info["lower"][0]
         xub = self.info["upper"][0]
-        self.extent = xlb, xub, ylb, yub
+        self.extent = [xlb, xub, ylb, yub]
         self.scaling = self.info["scaling"][0]
 
     def contains(self, x, y):
@@ -216,6 +234,9 @@ class Piece:
         tile_filenames = sorted(path.glob(f"*piece {piece}*"))
         tiles = [Tile.from_filename(f) for f in tile_filenames]
 
+        # This pads the z-axis so that we have empty slices above/below stacks
+        # such that they should align properly in z-space. This simplifies a
+        # few downstream operations.
         slice_n = [t.image.shape[2] for t in tiles]
         slice_lb = [t.info['lower'][2] for t in tiles]
         slice_ub = [t.info['upper'][2] for t in tiles]
@@ -232,6 +253,8 @@ class Piece:
         for (t, pb, pt) in zip(tiles, pad_bottom, pad_top):
             padding = [(0, 0), (0, 0), (pb, pt), (0, 0)]
             t.image = np.pad(t.image, padding)
+            t.info['lower'][2] = z_min
+            t.info['upper'][2] = z_max
 
         return cls(tiles, path, piece)
 
@@ -284,9 +307,9 @@ class Piece:
         for tile in self.tiles:
             tile.set_state(state['tiles'][tile.source.stem])
 
-    def guess_cells(self, cell_type):
+    def guess_cells(self, cell_type, width, spacing):
         channel = 0 if cell_type == 'IHC' else 1
-        width = 5e-6 if cell_type == 'IHC' else 2.5e-6
+        #width = 5e-6 if cell_type == 'IHC' else 2.5e-6
         tile = self.merge_tiles()
         x, y = self.spirals[cell_type].interpolate(resolution=0.0001)
         i = tile.map(x, y, channel, width=width)
@@ -299,8 +322,8 @@ class Piece:
         y_radius = tile.to_indices_delta(width, 'y')
         xnic, ynic = util.find_centroid(xni, yni, image, x_radius, y_radius, 4)
         xnc, ync = tile.to_coords(xnic, ynic)
-
         self.cells[cell_type].set_nodes(xnc, ync)
+        return len(xnc)
 
     def clear_cells(self, cell_type):
         self.cells[cell_type].set_nodes([], [])

@@ -4,6 +4,7 @@ from atom.api import (
     Bool,
     Dict,
     Enum,
+    Event,
     Float,
     Int,
     List,
@@ -14,6 +15,8 @@ from atom.api import (
     Typed,
     Value,
 )
+
+from enaml.application import deferred_call
 
 from matplotlib.axes import Axes
 from matplotlib.backend_bases import MouseButton
@@ -40,33 +43,44 @@ class PointPlot(Atom):
     visible = Bool(True)
     has_nodes = Bool(False)
 
+    updated = Event()
+    needs_redraw = Bool(False)
+
     def __init__(self, axes, points, **kwargs):
         super().__init__(**kwargs)
         self.axes = axes
         (self.artist,) = axes.plot([], [], "ko", mec="w", mew=1, zorder=100)
         self.points = points
+        points.observe('updated', self.request_redraw)
 
     def get_state(self):
         return {}
 
     def set_state(self, state):
-        self.redraw()
+        pass
 
     def add_point(self, x, y):
-        if self.points.add_node(x, y):
-            self.redraw()
+        self.points.add_node(x, y)
 
     def remove_point(self, x, y):
-        if self.points.remove_node(x, y):
+        self.points.remove_node(x, y)
+
+    @observe("visible")
+    def request_redraw(self, event=False):
+        self.needs_redraw = True
+        deferred_call(self.redraw_if_needed)
+
+    def redraw_if_needed(self):
+        if self.needs_redraw:
             self.redraw()
+            self.needs_redraw = False
 
     def redraw(self, event=None):
         nodes = self.points.get_nodes()
         self.has_nodes = len(nodes[0]) > 0
         self.artist.set_data(*nodes)
-
-    def _observe_visible(self, event):
         self.artist.set_visible(self.visible)
+        self.updated = True
 
 
 class LinePlot(PointPlot):
@@ -84,14 +98,11 @@ class LinePlot(PointPlot):
             [], [], "k-", zorder=90, path_effects=spline_effect
         )
 
-    def redraw(self):
+    def redraw(self, event=None):
         super().redraw()
         xi, yi = self.points.interpolate()
         self.has_spline = len(xi) > 0
         self.spline_artist.set_data(xi, yi)
-
-    def _observe_visible(self, event):
-        super()._observe_visible(event)
         self.spline_artist.set_visible(self.visible)
 
 
@@ -111,6 +122,9 @@ class ImagePlot(Atom):
     tile = Typed(Tile)
     artist = Value()
     axes = Value()
+
+    updated = Event()
+    needs_redraw = Bool(False)
 
     def get_state(self):
         return {
@@ -133,8 +147,6 @@ class ImagePlot(Atom):
         self.z_slice_min = state["z_slice_min"]
         self.z_slice_max = state["z_slice_max"]
         self.shift = state["shift"]
-        self.move_image()
-        self.update_image()
 
     def __init__(self, axes, tile, **kwargs):
         super().__init__(**kwargs)
@@ -147,8 +159,7 @@ class ImagePlot(Atom):
         self.z_slice_max = self.tile.image.shape[2] - 1
         self.z_slice = self.tile.image.shape[2] // 2
         self.shift = self.tile.info["scaling"][0] * 5
-        self.move_image()
-        self.update_image()
+        tile.observe('extent', self.request_redraw)
 
     def _observe_alpha(self, event):
         self.artist.set_alpha(self.alpha)
@@ -168,11 +179,19 @@ class ImagePlot(Atom):
             extent[:2] += self.shift
         elif direction is None:
             pass
-        self.tile.extent = tuple(extent.tolist())
-        self.artist.set_extent(self.tile.extent)
+        self.tile.extent = extent.tolist()
 
     @observe("z_slice", "display_mode", "display_channel")
-    def update_image(self, event=None):
+    def request_redraw(self, event=False):
+        self.needs_redraw = True
+        deferred_call(self.redraw_if_needed)
+
+    def redraw_if_needed(self):
+        if self.needs_redraw:
+            self.redraw()
+            self.needs_redraw = False
+
+    def redraw(self, event=None):
         if self.display_channel == "All":
             image = self.tile.image
         elif self.display_channel == "CtBP2":
@@ -184,6 +203,8 @@ class ImagePlot(Atom):
         elif self.display_mode == "slice":
             image = image[:, :, self.z_slice]
         self.artist.set_data(image[::-1, ::-1])
+        self.artist.set_extent(self.tile.extent)
+        self.updated = True
 
     def contains(self, x, y):
         return self.tile.contains(x, y)
@@ -192,7 +213,7 @@ class ImagePlot(Atom):
 class Presenter(Atom):
 
     # Tile artists
-    artists = Dict()
+    tile_artists = Dict()
     current_artist_index = Int()
     current_artist = Property()
 
@@ -206,7 +227,7 @@ class Presenter(Atom):
     axes = Typed(Axes)
     piece = Typed(Piece)
 
-    highlight_selected = Bool(True)
+    highlight_selected = Bool(False)
     alpha_selected = Float(0.75)
     alpha_unselected = Float(0.25)
     zorder_selected = Int(20)
@@ -223,19 +244,33 @@ class Presenter(Atom):
     spiral_ready = Bool(False)
     cells_empty = Bool(True)
 
+    unsaved_changes = Bool(False)
+    needs_redraw = Bool(False)
+
     def __init__(self, piece, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.piece = piece
-        self.artists = {
+        self.tile_artists = {
             t.source.name: ImagePlot(self.axes, t) for t in self.piece.tiles
         }
+        for artist in self.tile_artists.values():
+            artist.observe('updated', self._plot_updated)
         self.current_artist_index = 0
         for key in ('IHC', 'OHC1', 'OHC2', 'OHC3'):
-            self.point_artists[key, 'cells'] = PointPlot(self.axes, self.piece.cells[key], name=key)
-            self.point_artists[key, 'spiral'] = LinePlot(self.axes, self.piece.spirals[key], name=key)
+            cells = PointPlot(self.axes, self.piece.cells[key], name=key)
+            spiral = LinePlot(self.axes, self.piece.spirals[key], name=key)
+            cells.observe('updated', self._plot_updated)
+            spiral.observe('updated', self._plot_updated)
+            self.point_artists[key, 'cells'] = cells
+            self.point_artists[key, 'spiral'] = spiral
 
         # Not sure why this is necessary
         self.axes.axis(self.piece.get_image_extent())
+
+    def _plot_updated(self, event=None):
+        self.unsaved_changes = True
+        self.needs_redraw = True
+        deferred_call(self.redraw_if_needed)
 
     def _default_figure(self):
         return Figure()
@@ -244,7 +279,7 @@ class Presenter(Atom):
         return self.figure.add_axes([0.1, 0.1, 0.8, 0.8])
 
     def _get_current_artist(self):
-        return list(self.artists.values())[self.current_artist_index]
+        return list(self.tile_artists.values())[self.current_artist_index]
 
     def _get_current_point_artist(self):
         return self.point_artists[self.interaction_mode, self.interaction_submode]
@@ -252,7 +287,7 @@ class Presenter(Atom):
     @observe("highlight_selected",)
     def update_highlight(self, event=None):
         alpha = self.alpha_unselected if self.highlight_selected else 1
-        for artist in self.artists.values():
+        for artist in self.tile_artists.values():
             artist.zorder = self.zorder_unselected
             artist.alpha = alpha
         if self.highlight_selected:
@@ -270,7 +305,7 @@ class Presenter(Atom):
 
     def button_press_tiles(self, event):
         if event.button == MouseButton.LEFT:
-            for i, artist in enumerate(self.artists.values()):
+            for i, artist in enumerate(self.tile_artists.values()):
                 if artist.contains(event.xdata, event.ydata):
                     self.current_artist_index = i
                     break
@@ -282,6 +317,7 @@ class Presenter(Atom):
             self.current_point_artist.remove_point(event.xdata, event.ydata)
         elif event.key is None:
             self.current_point_artist.add_point(event.xdata, event.ydata)
+        self.unsaved_changes = True
         self.redraw()
 
     def button_release(self, event):
@@ -305,33 +341,25 @@ class Presenter(Atom):
         self.interaction_mode = mode
         self.interaction_submode = submode
 
-    def action_guess_cells(self):
-        print(self.interaction_mode)
-        self.piece.guess_cells(self.interaction_mode)
-        print('setting interaction mode')
-        self.current_point_artist.redraw()
+    def action_guess_cells(self, width=None, spacing=None):
+        n = self.piece.guess_cells(self.interaction_mode, width, spacing)
         self.redraw()
         self.set_interaction_mode(self.interaction_mode, 'cells')
+        return n
 
     def action_clear_cells(self):
         self.piece.clear_cells(self.interaction_mode)
         self.set_interaction_mode(self.interaction_mode, 'cells')
-        self.current_point_artist.redraw()
         self.redraw()
 
     def action_clear_spiral(self):
         self.piece.clear_spiral(self.interaction_mode)
         self.set_interaction_mode(self.interaction_mode, 'spiral')
-        self.current_point_artist.redraw()
         self.redraw()
 
     def action_clone_spiral(self, to_spiral, distance):
-        print(distance)
         xn, yn = self.piece.spirals[self.interaction_mode].expand_nodes(distance)
         self.piece.spirals[to_spiral].set_nodes(xn, yn)
-        self.point_artists[to_spiral, 'spiral'].redraw()
-        #self.current_point_artist.redraw()
-        #self.redraw()
 
     def key_press(self, event):
         if self.interaction_mode == 'tiles':
@@ -343,11 +371,11 @@ class Presenter(Atom):
             self.redraw()
         elif event.key.lower() == "n":
             self.current_artist_index = int(
-                np.clip(self.current_artist_index + 1, 0, len(self.artists) - 1)
+                np.clip(self.current_artist_index + 1, 0, len(self.tile_artists) - 1)
             )
         elif event.key.lower() == "p":
             self.current_artist_index = int(
-                np.clip(self.current_artist_index - 1, 0, len(self.artists) - 1)
+                np.clip(self.current_artist_index - 1, 0, len(self.tile_artists) - 1)
             )
 
     def _observe_current_artist_index(self, event):
@@ -410,30 +438,27 @@ class Presenter(Atom):
 
     def set_display_mode(self, display_mode, all_tiles=False):
         if all_tiles:
-            for artist in self.artists.values():
+            for artist in self.tile_artists.values():
                 artist.display_mode = display_mode
         else:
             self.current_artist.display_mode = display_mode
-        self.redraw()
 
     def set_display_channel(self, display_channel, all_tiles=False):
         if all_tiles:
-            for artist in self.artists.values():
+            for artist in self.tile_artists.values():
                 artist.display_channel = display_channel
         else:
             self.current_artist.display_channel = display_channel
-        self.redraw()
 
     def set_z_slice(self, z_slice, all_tiles=False):
         if all_tiles:
-            for artist in self.artists.values():
+            for artist in self.tile_artists.values():
                 artist.z_slice = z_slice
         else:
             self.current_artist.z_slice = z_slice
-        self.redraw()
 
     def get_state(self):
-        artist_states = {k: a.get_state() for k, a in self.artists.items()}
+        artist_states = {k: a.get_state() for k, a in self.tile_artists.items()}
         point_artist_states = {':'.join(k): a.get_state() for k, a in self.point_artists.items()}
         return {
             "interaction_mode": self.interaction_mode,
@@ -444,7 +469,7 @@ class Presenter(Atom):
 
     def set_state(self, state):
         for k, s in state["artists"].items():
-            self.artists[k].set_state(s)
+            self.tile_artists[k].set_state(s)
         for k, s in state["point_artists"].items():
             self.point_artists[tuple(k.split(':'))].set_state(s)
         self.set_interaction_mode(state["interaction_mode"],
@@ -457,6 +482,7 @@ class Presenter(Atom):
         }
         state_filename = self.piece.path / f"piece_{self.piece.piece}.json"
         state_filename.write_text(json.dumps(state, indent=4))
+        self.unsaved_changes = False
 
     def load_state(self):
         state_filename = self.piece.path / f"piece_{self.piece.piece}.json"
@@ -464,6 +490,12 @@ class Presenter(Atom):
         self.piece.set_state(state['data'])
         self.set_state(state['view'])
         self._update_plots()
+        self.unsaved_changes = False
 
     def redraw(self):
         self.figure.canvas.draw()
+
+    def redraw_if_needed(self):
+        if self.needs_redraw:
+            self.redraw()
+            self.needs_redraw = False

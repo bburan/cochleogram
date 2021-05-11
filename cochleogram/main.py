@@ -12,6 +12,7 @@ with enaml.imports():
 
 
 def launcher():
+    pass
 
 
 def main():
@@ -32,8 +33,8 @@ def main():
     else:
         pieces = [args.piece]
 
-    presenters = [Presenter(Piece.from_path(args.path, p)) for p in pieces]
     app = QtApplication()
+    presenters = [Presenter(Piece.from_path(args.path, p)) for p in pieces]
     view = CochleagramWindow(presenters=presenters)
     view.show()
     app.start()
