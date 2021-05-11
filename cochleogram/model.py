@@ -6,7 +6,7 @@ from scipy import ndimage
 from scipy import signal
 from raster_geometry import sphere
 
-import util
+from cochleogram import util
 
 
 class Points:

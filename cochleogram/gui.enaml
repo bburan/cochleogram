@@ -3,7 +3,10 @@ from enaml.core.api import Looper
 from enaml.layout.api import align, hbox, InsertTab, spacer, vbox
 from enaml.stdlib.fields import FloatField
 from enaml.stdlib.message_box import question
-from enaml.widgets.api import Action, ButtonGroup, CheckBox, Container, DockArea, DockItem, HGroup, Label, MainWindow, Menu, MenuBar, MPLCanvas, ObjectCombo, PushButton, Slider
+from enaml.widgets.api import (Action, ButtonGroup, CheckBox, Container,
+                               DockArea, DockItem, HGroup, Label, MainWindow,
+                               Menu, MenuBar, MPLCanvas, ObjectCombo,
+                               PushButton, Slider)
 
 
 def bind(figure, presenter):

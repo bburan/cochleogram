@@ -26,8 +26,8 @@ from matplotlib import (
 import numpy as np
 from scipy import interpolate
 
-from model import Piece, Points, Tile
-from util import shortest_path
+from cochleogram.model import Piece, Points, Tile
+from cochleogram.util import shortest_path
 
 
 class PointPlot(Atom):

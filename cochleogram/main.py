@@ -4,11 +4,14 @@ import re
 import enaml
 from enaml.qt.qt_application import QtApplication
 
-from model import Piece
-from presenter import Presenter
+from cochleogram.model import Piece
+from cochleogram.presenter import Presenter
 
 with enaml.imports():
-    from gui import CochleagramWindow
+    from cochleogram.gui import CochleagramWindow
+
+
+def launcher():
 
 
 def main():
