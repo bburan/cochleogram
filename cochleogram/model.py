@@ -313,7 +313,7 @@ class Piece:
         tile = self.merge_tiles()
         x, y = self.spirals[cell_type].interpolate(resolution=0.0001)
         i = tile.map(x, y, channel, width=width)
-        xn, yn = util.find_nuclei(x, y, i)
+        xn, yn = util.find_nuclei(x, y, i, spacing=spacing)
 
         # Map to centroid
         xni, yni = tile.to_indices(xn, yn)

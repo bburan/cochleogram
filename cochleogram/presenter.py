@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import json
 from atom.api import (
     Atom,
@@ -246,6 +248,7 @@ class Presenter(Atom):
 
     unsaved_changes = Bool(False)
     needs_redraw = Bool(False)
+    saved_state = Dict()
 
     def __init__(self, piece, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -266,9 +269,11 @@ class Presenter(Atom):
 
         # Not sure why this is necessary
         self.axes.axis(self.piece.get_image_extent())
+        self.saved_state = self.get_full_state()
 
+    @observe('saved_state')
     def _plot_updated(self, event=None):
-        self.unsaved_changes = True
+        self.unsaved_changes = self.saved_state['data'] != self.get_full_state()['data']
         self.needs_redraw = True
         deferred_call(self.redraw_if_needed)
 
@@ -317,8 +322,6 @@ class Presenter(Atom):
             self.current_point_artist.remove_point(event.xdata, event.ydata)
         elif event.key is None:
             self.current_point_artist.add_point(event.xdata, event.ydata)
-        self.unsaved_changes = True
-        self.redraw()
 
     def button_release(self, event):
         if event.button == MouseButton.RIGHT:
@@ -335,7 +338,6 @@ class Presenter(Atom):
             self.current_spiral_artist = self.point_artists[self.interaction_mode, 'spiral']
             self.current_cells_artist = self.point_artists[self.interaction_mode, 'cells']
             self.current_point_artist.visible = True
-        self.redraw()
 
     def set_interaction_mode(self, mode, submode):
         self.interaction_mode = mode
@@ -343,19 +345,16 @@ class Presenter(Atom):
 
     def action_guess_cells(self, width=None, spacing=None):
         n = self.piece.guess_cells(self.interaction_mode, width, spacing)
-        self.redraw()
         self.set_interaction_mode(self.interaction_mode, 'cells')
         return n
 
     def action_clear_cells(self):
         self.piece.clear_cells(self.interaction_mode)
         self.set_interaction_mode(self.interaction_mode, 'cells')
-        self.redraw()
 
     def action_clear_spiral(self):
         self.piece.clear_spiral(self.interaction_mode)
         self.set_interaction_mode(self.interaction_mode, 'spiral')
-        self.redraw()
 
     def action_clone_spiral(self, to_spiral, distance):
         xn, yn = self.piece.spirals[self.interaction_mode].expand_nodes(distance)
@@ -368,7 +367,6 @@ class Presenter(Atom):
     def key_press_tiles(self, event):
         if event.key in ["right", "left", "up", "down"]:
             self.current_artist.move_image(event.key)
-            self.redraw()
         elif event.key.lower() == "n":
             self.current_artist_index = int(
                 np.clip(self.current_artist_index + 1, 0, len(self.tile_artists) - 1)
@@ -475,22 +473,24 @@ class Presenter(Atom):
         self.set_interaction_mode(state["interaction_mode"],
                                   state["interaction_submode"])
 
-    def save_state(self):
-        state = {
+    def get_full_state(self):
+        return deepcopy({
             "data": self.piece.get_state(),
             "view": self.get_state(),
-        }
+        })
+
+    def save_state(self):
         state_filename = self.piece.path / f"piece_{self.piece.piece}.json"
+        state = self.get_full_state()
         state_filename.write_text(json.dumps(state, indent=4))
-        self.unsaved_changes = False
+        self.saved_state = state
 
     def load_state(self):
         state_filename = self.piece.path / f"piece_{self.piece.piece}.json"
         state = json.loads(state_filename.read_text())
         self.piece.set_state(state['data'])
         self.set_state(state['view'])
-        self._update_plots()
-        self.unsaved_changes = False
+        self.saved_state = state
 
     def redraw(self):
         self.figure.canvas.draw()

@@ -153,14 +153,6 @@ enamldef MPLDockItem(DockItem):
                 if button.text == 'Yes':
                     presenter.action_clear_spiral()
 
-        #PushButton: action_guess_cells:
-        #    text = 'Find cells'
-        #    enabled << presenter.current_spiral_artist is not None and presenter.current_spiral_artist.has_spline
-        #    clicked ::
-        #        button = question(self, 'Confirm action', 'Are you sure you want to guess the cells?\nThis will remove any previous cells you have marked.')
-        #        if button.text == 'Yes':
-        #            presenter.action_guess_cells()
-
         PushButton: action_clear_cells:
             text = 'Clear all cells'
             enabled << presenter.current_cells_artist is not None and presenter.current_cells_artist.has_nodes
@@ -176,7 +168,6 @@ enamldef MPLDockItem(DockItem):
 
         PushButton: save_analysis:
             text = 'Save'
-            enabled << presenter.unsaved_changes
             clicked ::
                 presenter.save_state()
 
