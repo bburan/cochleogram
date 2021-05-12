@@ -20,6 +20,7 @@ from atom.api import (
 
 from enaml.application import deferred_call
 
+import matplotlib as mp
 from matplotlib.axes import Axes
 from matplotlib.backend_bases import MouseButton
 from matplotlib.figure import Figure
@@ -111,6 +112,7 @@ class LinePlot(PointPlot):
 class ImagePlot(Atom):
 
     alpha = Float(0.75)
+    highlight = Bool(False)
     zorder = Int(10)
 
     display_mode = Enum("projection", "slice")
@@ -123,6 +125,7 @@ class ImagePlot(Atom):
 
     tile = Typed(Tile)
     artist = Value()
+    rectangle = Value()
     axes = Value()
 
     updated = Event()
@@ -158,10 +161,19 @@ class ImagePlot(Atom):
         self.axes.xaxis.set_major_formatter(fmt)
         self.axes.yaxis.set_major_formatter(fmt)
         self.artist = axes.imshow(np.zeros((0, 0)), origin="lower")
+        self.rectangle = mp.patches.Rectangle((0, 0), 0, 0, ec='red', fc='None', zorder=5000)
+        self.rectangle.set_alpha(0)
+        self.axes.add_patch(self.rectangle)
         self.z_slice_max = self.tile.image.shape[2] - 1
         self.z_slice = self.tile.image.shape[2] // 2
         self.shift = self.tile.info["scaling"][0] * 5
         tile.observe('extent', self.request_redraw)
+
+    def _observe_highlight(self, event):
+        if self.highlight:
+            self.rectangle.set_alpha(1)
+        else:
+            self.rectangle.set_alpha(0)
 
     def _observe_alpha(self, event):
         self.artist.set_alpha(self.alpha)
@@ -169,21 +181,20 @@ class ImagePlot(Atom):
     def _observe_zorder(self, event):
         self.artist.set_zorder(self.zorder)
 
-    def move_image(self, direction=None):
+    def move_image(self, direction, step_scale=1):
         extent = np.array(self.tile.extent)
+        step = step_scale * self.shift
         if direction == "up":
-            extent[2:] += self.shift
+            extent[2:] += step
         elif direction == "down":
-            extent[2:] -= self.shift
+            extent[2:] -= step
         elif direction == "left":
-            extent[:2] -= self.shift
+            extent[:2] -= step
         elif direction == "right":
-            extent[:2] += self.shift
-        elif direction is None:
-            pass
+            extent[:2] += step
         self.tile.extent = extent.tolist()
 
-    @observe("z_slice", "display_mode", "display_channel")
+    @observe("z_slice", "display_mode", "display_channel", "alpha", "highlight")
     def request_redraw(self, event=False):
         self.needs_redraw = True
         deferred_call(self.redraw_if_needed)
@@ -206,6 +217,8 @@ class ImagePlot(Atom):
             image = image[:, :, self.z_slice]
         self.artist.set_data(image[::-1, ::-1])
         self.artist.set_extent(self.tile.extent)
+        xlb, xub, ylb, yub = self.tile.extent
+        self.rectangle.set_bounds(xlb, ylb, xub-xlb, yub-ylb)
         self.updated = True
 
     def contains(self, x, y):
@@ -230,8 +243,8 @@ class Presenter(Atom):
     piece = Typed(Piece)
 
     highlight_selected = Bool(False)
-    alpha_selected = Float(0.75)
-    alpha_unselected = Float(0.25)
+    alpha_selected = Float(0.50)
+    alpha_unselected = Float(0.50)
     zorder_selected = Int(20)
     zorder_unselected = Int(10)
 
@@ -295,13 +308,16 @@ class Presenter(Atom):
         for artist in self.tile_artists.values():
             artist.zorder = self.zorder_unselected
             artist.alpha = alpha
+            artist.highlight = False
         if self.highlight_selected:
             self.current_artist.alpha = self.alpha_selected
+            self.current_artist.rectangle.set_alpha(1)
+            self.current_artist.highlight = True
         self.current_artist.zorder = self.zorder_selected
         self.redraw()
 
     def button_press(self, event):
-        if event.button == MouseButton.RIGHT:
+        if event.button == MouseButton.RIGHT and event.xdata is not None:
             self.start_pan(event)
         elif self.interaction_mode == 'tiles':
             self.button_press_tiles(event)
@@ -309,7 +325,7 @@ class Presenter(Atom):
             self.button_press_point_plot(event)
 
     def button_press_tiles(self, event):
-        if event.button == MouseButton.LEFT:
+        if event.button == MouseButton.LEFT and event.xdata is not None:
             for i, artist in enumerate(self.tile_artists.values()):
                 if artist.contains(event.xdata, event.ydata):
                     self.current_artist_index = i
@@ -318,9 +334,9 @@ class Presenter(Atom):
     def button_press_point_plot(self, event):
         if event.button != MouseButton.LEFT:
             return
-        if event.key == "shift":
+        if event.key == "shift" and event.xdata is not None:
             self.current_point_artist.remove_point(event.xdata, event.ydata)
-        elif event.key is None:
+        elif event.key is None and event.xdata is not None:
             self.current_point_artist.add_point(event.xdata, event.ydata)
 
     def button_release(self, event):
@@ -367,6 +383,8 @@ class Presenter(Atom):
     def key_press_tiles(self, event):
         if event.key in ["right", "left", "up", "down"]:
             self.current_artist.move_image(event.key)
+        elif event.key in ["shift+right", "shift+left", "shift+up", "shift+down"]:
+            self.current_artist.move_image(event.key.split('+')[1], 0.25)
         elif event.key.lower() == "n":
             self.current_artist_index = int(
                 np.clip(self.current_artist_index + 1, 0, len(self.tile_artists) - 1)
@@ -380,7 +398,8 @@ class Presenter(Atom):
         self.update_highlight()
 
     def motion(self, event):
-        self.pan(event)
+        if event.xdata is not None:
+            self.pan(event)
 
     def start_pan(self, event):
         self.pan_event = event
