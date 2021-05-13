@@ -150,7 +150,8 @@ class Tile(Atom):
 
     @classmethod
     def from_filename(cls, filename):
-        info, image = util.load_data(filename)
+        with filename.open('rb') as fh:
+            info, image = pickle.load(fh)
         return cls(info, image, filename)
 
     def to_coords(self, x, y, z=None):
@@ -243,7 +244,7 @@ class Piece:
         self.cells = {k: Points() for k in keys}
 
     @classmethod
-    def from_path(cls, path, piece):
+    def from_path(cls, path, piece=None):
         path = Path(path)
         tile_filenames = sorted(path.glob(f"*piece {piece}*"))
         tiles = [Tile.from_filename(f) for f in tile_filenames]
@@ -355,7 +356,7 @@ class Cochlea:
     def from_path(cls, path):
         p_piece = re.compile('.*piece (\d+)\w?')
         pieces = []
-        for piece_path in Path(path).glob('*piece*.czi'):
+        for piece_path in Path(path).glob('*piece*.pkl'):
             p = int(p_piece.match(piece_path.stem).group(1))
             pieces.append(Piece.from_path(path, p))
         return cls(pieces, path)
