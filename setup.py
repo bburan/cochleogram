@@ -2,11 +2,14 @@ from setuptools import find_packages, setup
 
 
 requirements = [
+    'aicspylibczi',
+    'atom',
     'enaml',
-    'numpy',
-    'scipy',
-    'pandas',
     'matplotlib',
+    'numpy',
+    'raster_geometry',
+    'pandas',
+    'scipy',
 ]
 
 
