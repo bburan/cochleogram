@@ -79,20 +79,20 @@ class Points(Atom):
         self.y = list(y)
         self.updated = True
 
-    def add_node(self, x, y):
-        if not self.has_node(x, y):
+    def add_node(self, x, y, hit_threshold=2.5e-6):
+        if not self.has_node(x, y, hit_threshold):
             self.x.append(x)
             self.y.append(y)
             self.updated = True
 
-    def has_node(self, x, y, hit_threshold=1e-6):
+    def has_node(self, x, y, hit_threshold):
         try:
             i = self.find_node(x, y, hit_threshold)
             return True
         except ValueError:
             return False
 
-    def find_node(self, x, y, hit_threshold=1e-6):
+    def find_node(self, x, y, hit_threshold):
         xd = np.array(self.x) - x
         yd = np.array(self.y) - y
         d = np.sqrt(xd ** 2 + yd ** 2)
@@ -101,7 +101,7 @@ class Points(Atom):
             return i
         raise ValueError('No node nearby')
 
-    def remove_node(self, x, y, hit_threshold=1e-6):
+    def remove_node(self, x, y, hit_threshold=25e-6):
         try:
             i = self.find_node(x, y, hit_threshold)
             self.x.pop(i)
