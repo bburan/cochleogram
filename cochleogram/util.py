@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 import pickle
 
@@ -59,12 +60,12 @@ def shortest_path(x, y, i=0):
     return list(zip(*path))
 
 
-def load_data(filename, max_xy=512, reload=False):
+def load_data(filename, max_xy=512, dtype='uint8', reload=False):
     filename = Path(filename)
     cache_filename = (
         filename.parent
         / "processed"
-        / f"max_xy_{max_xy}"
+        / f"max_xy_{max_xy}_dtype_{dtype}"
         / filename.with_suffix(".pkl").name
     )
     if not reload and cache_filename.exists():
@@ -156,9 +157,21 @@ def load_data(filename, max_xy=512, reload=False):
 
     # Rescale to range 0 ... 1
     img = img / img.max(axis=(0, 1, 2), keepdims=True)
+    if 'int' in dtype:
+        img *= 255
+    img = img.astype(dtype)
 
     cache_filename.parent.mkdir(exist_ok=True, parents=True)
     with cache_filename.open("wb") as fh:
         pickle.dump((info, img), fh, pickle.HIGHEST_PROTOCOL)
 
     return info, img
+
+
+def list_pieces(path):
+    p_piece = re.compile('.*piece (\d+)\w?')
+    pieces = []
+    for path in Path(path).glob('*piece*.czi'):
+        piece = int(p_piece.match(path.stem).group(1))
+        pieces.append(piece)
+    return sorted(set(pieces))

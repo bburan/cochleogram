@@ -26,6 +26,7 @@ setup(
     entry_points={
         'console_scripts': [
             'cochleogram=cochleogram.main:main',
+            'cochleogram-prepare=cochleogram.main:main_prepare',
         ],
     },
 )
