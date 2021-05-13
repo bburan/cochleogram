@@ -37,7 +37,7 @@ def main():
     app = QtApplication()
 
     if args.path is not None:
-        pieces = list_pieces(path) if args.piece is None else [args.piece]
+        pieces = list_pieces(args.path) if args.piece is None else [args.piece]
         presenters = [Presenter(Piece.from_path(args.path, p)) for p in pieces]
     else:
         presenters = []
