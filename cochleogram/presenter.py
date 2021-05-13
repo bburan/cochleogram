@@ -270,13 +270,13 @@ class Presenter(Atom):
             t.source.name: ImagePlot(self.axes, t) for t in self.piece.tiles
         }
         for artist in self.tile_artists.values():
-            artist.observe('updated', self._plot_updated)
+            artist.observe('updated', self.update)
         self.current_artist_index = 0
         for key in ('IHC', 'OHC1', 'OHC2', 'OHC3'):
             cells = PointPlot(self.axes, self.piece.cells[key], name=key)
             spiral = LinePlot(self.axes, self.piece.spirals[key], name=key)
-            cells.observe('updated', self._plot_updated)
-            spiral.observe('updated', self._plot_updated)
+            cells.observe('updated', self.update)
+            spiral.observe('updated', self.update)
             self.point_artists[key, 'cells'] = cells
             self.point_artists[key, 'spiral'] = spiral
 
@@ -284,9 +284,15 @@ class Presenter(Atom):
         self.axes.axis(self.piece.get_image_extent())
         self.saved_state = self.get_full_state()
 
-    @observe('saved_state')
-    def _plot_updated(self, event=None):
-        self.unsaved_changes = self.saved_state['data'] != self.get_full_state()['data']
+    def _observe_saved_state(self, event):
+        self.check_for_changes()
+
+    def check_for_changes(self):
+        self.unsaved_changes = self.saved_state['data'] != \
+            self.get_full_state()['data']
+
+    def update(self, event=None):
+        self.check_for_changes()
         self.needs_redraw = True
         deferred_call(self.redraw_if_needed)
 
@@ -503,6 +509,7 @@ class Presenter(Atom):
         state = self.get_full_state()
         state_filename.write_text(json.dumps(state, indent=4))
         self.saved_state = state
+        self.update()
 
     def load_state(self):
         state_filename = self.piece.path / f"piece_{self.piece.piece}.json"
@@ -510,6 +517,7 @@ class Presenter(Atom):
         self.piece.set_state(state['data'])
         self.set_state(state['view'])
         self.saved_state = state
+        self.update()
 
     def redraw(self):
         self.figure.canvas.draw()
