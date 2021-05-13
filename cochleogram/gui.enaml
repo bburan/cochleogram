@@ -4,9 +4,9 @@ from enaml.layout.api import align, hbox, InsertTab, spacer, vbox
 from enaml.stdlib.fields import FloatField
 from enaml.stdlib.message_box import information, question
 from enaml.widgets.api import (Action, ButtonGroup, CheckBox, Container,
-                               DockArea, DockItem, HGroup, Label, MainWindow,
-                               Menu, MenuBar, MPLCanvas, ObjectCombo,
-                               PushButton, Slider)
+                               DockArea, DockItem, FileDialogEx, HGroup, Label,
+                               MainWindow, Menu, MenuBar, MPLCanvas,
+                               ObjectCombo, PushButton, Slider)
 
 
 def bind(figure, presenter):
@@ -25,6 +25,27 @@ def add_dock_item(dock_area, presenter):
     item = MPLDockItem(dock_area, name='dock_{}'.format(n_items), presenter=presenter)
     op = InsertTab(item=item.name, target=target)
     dock_area.update_layout(op)
+
+
+def save_state(parent, presenters):
+    q = 'Your previous analysis will be overwritten. Are you sure?'
+    button = question(parent, 'Confirm action', q)
+    if button.text == 'Yes':
+        for presenter in presenters:
+            presenter.save_state()
+        information(parent, 'Analysis saved', 'Analysis has been saved.')
+
+
+def load_state(parent, presenters):
+    if any(p.unsaved_changes for p in presenters):
+        q = 'There are unsaved changes. Your current analysis will be lost. Are you sure?'
+        button = question(parent, 'Confirm action', q)
+        if button.text == 'No':
+            return
+    for presenter in presenters:
+        presenter.load_state()
+    information(parent, 'Analysis loaded', 'Analysis has been loaded.')
+
 
 
 CELLS = ['IHC', 'OHC1', 'OHC2', 'OHC3']
@@ -132,7 +153,7 @@ enamldef MPLDockItem(DockItem):
             padding = 0
             spacing = 0
             Looper:
-                iterable = ['spiral', 'cells']
+                iterable = ['spiral', 'bad regions', 'cells']
                 PushButton:
                     enabled << presenter.interaction_mode != 'tiles'
                     text = loop_item
@@ -164,12 +185,12 @@ enamldef MPLDockItem(DockItem):
         PushButton: load_analysis:
             text = 'Load'
             clicked ::
-                presenter.load_state()
+                load_state(self, [presenter])
 
         PushButton: save_analysis:
             text = 'Save'
             clicked ::
-                presenter.save_state()
+                save_state(self, [presenter])
 
         HGroup: action_guess_cells:
             padding = 0
@@ -195,30 +216,6 @@ enamldef MPLDockItem(DockItem):
                         n = presenter.action_guess_cells(guess_width.value * 1e-6, guess_spacing.value * 1e-6)
                         information(self, 'Info', f'Found {n} cells')
 
-        #HGroup: action_copy_spiral:
-        #    padding = 0
-        #    align_widths = False
-        #    trailing_spacer = spacer(0)
-        #    enabled << presenter.current_spiral_artist is not None and presenter.current_spiral_artist.has_spline
-        #    Label:
-        #        text = 'Copy spiral to'
-        #    ObjectCombo: to_spiral:
-        #        items << [c for c in CELLS if c != presenter.interaction_mode]
-        #    Label:
-        #        text = 'and expand by'
-        #    FloatField: distance:
-        #        value = 5.0
-        #    Label:
-        #        text = 'μm'
-        #    PushButton:
-        #        text = 'update'
-        #        clicked ::
-        #            button = question(self, 'Confirm action', f'Are you sure you want to overwrite the {to_spiral.selected} spiral?')
-        #            if button.text == 'Yes':
-        #                presenter.action_clone_spiral(to_spiral.selected, distance.value * 1e-6)
-        #                presenter.point_artists[to_spiral.selected, 'spiral'].visible = True
-        #                presenter.redraw()
-
         MPLCanvas: canvas:
             figure << presenter.figure
             toolbar_visible = True
@@ -231,11 +228,41 @@ enamldef CochleagramWindow(MainWindow): window:
     initial_size = (900, 900)
     title = 'Cochelogram'
 
-    attr presenters
+    attr presenters = []
+
+    MenuBar:
+        Menu:
+            title = '&File'
+            Action:
+                text = 'Open\tCtrl+O'
+                triggered ::
+                    path = FileDialogEx.get_existing_directory(window)
+                    if path:
+                        from cochleogram.model import Cochlea
+                        cochlea = Cochlea.from_path(path)
+                        window.presenters = [Presenter(p) for p in cochlea.pieces]
+                        for p in window.presenters:
+                            deferred_call(add_dock_item, workspace, presenter)
+
+            Action:
+                text = 'Save analysis\tCtrl+S'
+                triggered ::
+                    save_state(window, window.presenters)
+
+            Action:
+                text = 'Load analysis\tCtrl+L'
+                triggered ::
+                    load_state(window, window.presenters)
 
     initialized ::
         for presenter in presenters:
             deferred_call(add_dock_item, workspace, presenter)
+
+    closing ::
+        if any(p.unsaved_changes for p in presenters):
+            button = question(window, 'Question', 'There are unsaved changes. Are you sure you want to exit?')
+            if button.text == 'No':
+                change['value'].ignore()
 
     Container:
         DockArea: workspace:
