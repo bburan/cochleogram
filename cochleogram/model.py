@@ -344,3 +344,18 @@ class Piece:
 
     def clear_spiral(self, cell_type):
         self.spirals[cell_type].set_nodes([], [])
+
+
+class Cochlea:
+    def __init__(self, pieces, path):
+        self.pieces = pieces
+        self.path = path
+
+    @classmethod
+    def from_path(cls, path):
+        p_piece = re.compile('.*piece (\d+)\w?')
+        pieces = []
+        for piece_path in Path(path).glob('*piece*.czi'):
+            p = int(p_piece.match(piece_path.stem).group(1))
+            pieces.append(Piece.from_path(path, p))
+        return cls(pieces, path)
