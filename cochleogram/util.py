@@ -171,7 +171,9 @@ def load_data(filename, max_xy=512, dtype='uint8', reload=False):
 def list_pieces(path):
     p_piece = re.compile('.*piece (\d+)\w?')
     pieces = []
-    for path in Path(path).glob('*piece*.czi'):
+    for path in Path(path).glob('*piece *.*'):
+        if path.name.endswith('.json'):
+            continue
         piece = int(p_piece.match(path.stem).group(1))
         pieces.append(piece)
     return sorted(set(pieces))
