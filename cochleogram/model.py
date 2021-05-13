@@ -70,7 +70,8 @@ class Points(Atom):
         if len(nodes[0]) <= 3:
             return [], []
         tck, u = interpolate.splprep(nodes, k=degree, s=smoothing)
-        xi, yi = interpolate.splev(np.arange(0, 1 + resolution, resolution), tck, der=0)
+        x = np.arange(0, 1 + resolution, resolution)
+        xi, yi = interpolate.splev(x, tck, der=0)
         return xi, yi
 
     def set_nodes(self, x, y):
@@ -79,22 +80,35 @@ class Points(Atom):
         self.updated = True
 
     def add_node(self, x, y):
-        self.x.append(x)
-        self.y.append(y)
-        self.updated = True
-        return True
+        if not self.has_node(x, y):
+            self.x.append(x)
+            self.y.append(y)
+            self.updated = True
 
-    def remove_node(self, x, y, hit_threshold=10):
+    def has_node(self, x, y, hit_threshold=1e-6):
+        try:
+            i = self.find_node(x, y, hit_threshold)
+            return True
+        except ValueError:
+            return False
+
+    def find_node(self, x, y, hit_threshold=1e-6):
         xd = np.array(self.x) - x
         yd = np.array(self.y) - y
         d = np.sqrt(xd ** 2 + yd ** 2)
         i = np.argmin(d)
         if d[i] < hit_threshold:
+            return i
+        raise ValueError('No node nearby')
+
+    def remove_node(self, x, y, hit_threshold=1e-6):
+        try:
+            i = self.find_node(x, y, hit_threshold)
             self.x.pop(i)
             self.y.pop(i)
             self.updated = True
-            return True
-        return False
+        except ValueError:
+            pass
 
     def get_state(self):
         return {
