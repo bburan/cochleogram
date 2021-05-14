@@ -283,17 +283,55 @@ enamldef CochleagramWindow(MainWindow): window:
                 Container:
                     Html:
                         source = '''
+                        <h3>Datasets</h3>
+                        <p>When loading data (File -> Open), select the
+                        cochleogram_analysis folder. All pieces found in that
+                        folder will be loaded. Any prior analyses will also be
+                        loaded as well.</p>
+
+                        <p>When loading/saving analyses, you can load/save each
+                        piece individually via the load/save buttons on each
+                        tab. To load/save all pieces at once, use the file
+                        menu.</p>
+
                         <h3>General interaction</h3>
                         <dl>
                             <dt>right click + drag</dt> <dd>Pan image</dd>
                             <dt>mouse wheel</dt> <dd>Zoom</dd>
+                            <dt>t</dt> <dd>Select tile mode</dd>
+                            <dt>i</dt> <dd>Select IHC mode</dd>
+                            <dt>1</dt> <dd>Select OHC1 mode</dd>
+                            <dt>2</dt> <dd>Select OHC2 mode</dd>
+                            <dt>3</dt> <dd>Select OHC3 mode</dd>
+                            <dt>s</dt> <dd>Select spiral tool</dd>
+                            <dt>e</dt> <dd>Select exclude tool</dd>
+                            <dt>c</dt> <dd>Select cell tool</dd>
                         </dl>
+
+                        <p>Analysis requires the following steps:</p>
+                        <ol>
+                            <li>Aligning the tiles so that they overlap as
+                            accurately as possible.</li>
+                            <li>Tracing a spiral through each row of hair
+                            cells.</li>
+                            <li>Marking individual hair cells.</li>
+                            <li>Marking bad regions.</li>
+                        </ol>
+                        <p>Tools are provided to facilitate each step. Be sure
+                        that you are satisfied with the result of the current
+                        step before moving to the next step. Although you can
+                        go back and edit a previous step, it may affect your
+                        analysis (e.g., if you need to move a tile after
+                        marking hair cells, you may have to manually edit a
+                        large number of hair cells).</p>
 
                         <h3>Tile mode</h3>
                         <dl>
                             <dt>left click</dt> <dd>Select tile</dd>
                             <dt>n</dt> <dd>Select next tile</dd>
                             <dt>p</dt> <dd>Select previous tile</dd>
+                            <dt>arrow keys</dt> <dd>Move selected tile (large step)</dd>
+                            <dt>shift + arrow keys</dt> <dd>Move selected tile (small step)</dd>
                         </dl>
 
                         <h3>Spiral mode</h3>
@@ -302,11 +340,33 @@ enamldef CochleagramWindow(MainWindow): window:
                         points and the spiral will be rerouted through those
                         points. The algorithm assumes that the "next" point in
                         the path is the one closest to it (i.e., the order in
-                        which you add the points does not matter).</p>
+                        which you add the points does not matter). However, be
+                        sure that the very first point you add is the beginning
+                        or end of the spiral.</p>
+                        <p>Be sure that the spiral bisects the nuclei (IHCs) or
+                        cuticular plate (OHCs).</p>
                         <dl>
                             <dt>left click</dt> <dd>Add point</dd>
                             <dt>shift + left click</dt> <dd>Remove point</dd>
-                            <dt>alt + left drag</dt> <dd>Mark region as bad</dd>
-                            <dt>shift + alt + left drag</dt> <dd>Remove bad region</dd>
+                        </dl>
+
+                        <h3>Cell mode</h3>
+                        <p>After marking the spiral, run the algorithm to
+                        automatically detect cells. You can play with the
+                        settings (each time you run, it will delete the
+                        existing cells and create new ones).</p>
+                        <dl>
+                            <dt>left click</dt> <dd>Add cell</dd>
+                            <dt>shift + left click</dt> <dd>Remove cell</dd>
+                        </dl>
+
+                        <h3>Exclude mode</h3>
+                        <p>Finally, indicate regions that you felt you could
+                        not interpret properly for a particular row of
+                        cells.</p>
+                        <dl>
+                            <dt>left click</dt> <dd>Start/end region</dd>
+                            <dt>alt + left click</dt> <dd>Remove region</dd>
+                            <dt>escape</dt> <dd>Cancel current region</dd>
                         </dl>
                         '''
