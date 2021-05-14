@@ -166,7 +166,7 @@ class Points(Atom):
         self.x = state["x"]
         self.y = state["y"]
         self.i = state["i"]
-        self.exclude = state["exclude"]
+        self.exclude = state.get("exclude", [])
         self.updated = True
 
 

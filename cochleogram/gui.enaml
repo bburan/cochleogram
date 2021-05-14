@@ -8,6 +8,8 @@ from enaml.widgets.api import (Action, ButtonGroup, CheckBox, Container,
                                Html, Label, MainWindow, Menu, MenuBar,
                                MPLCanvas, ObjectCombo, PushButton, Slider)
 
+from cochleogram.presenter import Presenter
+
 
 def bind(figure, presenter):
     figure.canvas.mpl_connect('key_press_event', lambda e: presenter.key_press(e))
@@ -163,7 +165,7 @@ enamldef MPLDockItem(DockItem):
                     checked << loop_item == presenter.interaction_submode
                     toggled ::
                         if self.checked:
-                            presenter.interaction_mode = loop_item
+                            presenter.interaction_submode = loop_item
 
         Label: action_label:
             text = 'Actions'
@@ -220,7 +222,7 @@ enamldef MPLDockItem(DockItem):
 
         MPLCanvas: canvas:
             figure << presenter.figure
-            toolbar_visible = True
+            toolbar_visible = False
             initialized ::
                 deferred_call(bind, figure, presenter)
 
@@ -244,7 +246,8 @@ enamldef CochleagramWindow(MainWindow): window:
                         cochlea = Cochlea.from_path(path)
                         window.presenters = [Presenter(p) for p in cochlea.pieces]
                         for p in window.presenters:
-                            deferred_call(add_dock_item, workspace, presenter)
+                            p.load_state()
+                            deferred_call(add_dock_item, workspace, p)
 
             Action:
                 text = 'Save analysis\tCtrl+S'

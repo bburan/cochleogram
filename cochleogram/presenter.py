@@ -474,15 +474,15 @@ class Presenter(Atom):
         if event.button != MouseButton.LEFT:
             return
         if event.key == "shift" and event.xdata is not None:
-            if self.interaction_submode == 'cell':
-                self.point_artists[self.interaction_mode, 'cell'].remove_point(event.xdata, event.ydata)
+            if self.interaction_submode == 'cells':
+                self.point_artists[self.interaction_mode, 'cells'].remove_point(event.xdata, event.ydata)
             elif self.interaction_submode == 'spiral':
                 self.point_artists[self.interaction_mode, 'spiral'].remove_point(event.xdata, event.ydata)
             elif self.interaction_submode == 'exclude':
                 self.point_artists[self.interaction_mode, 'spiral'].remove_exclude(event.xdata, event.ydata)
         elif event.key is None and event.xdata is not None:
-            if self.interaction_submode == 'cell':
-                self.point_artists[self.interaction_mode, 'cell'].add_point(event.xdata, event.ydata)
+            if self.interaction_submode == 'cells':
+                self.point_artists[self.interaction_mode, 'cells'].add_point(event.xdata, event.ydata)
             elif self.interaction_submode == 'spiral':
                 self.point_artists[self.interaction_mode, 'spiral'].add_point(event.xdata, event.ydata)
             elif self.interaction_submode == 'exclude':
@@ -540,6 +540,9 @@ class Presenter(Atom):
         """
         This zooms in without shifting the center point
         """
+        if event.xdata is None:
+            return
+
         base_scale = 1.1
 
         cur_xlim = self.axes.get_xlim()
