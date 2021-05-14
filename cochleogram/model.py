@@ -142,6 +142,18 @@ class Points(Atom):
         self.exclude = new_exclude
         self.updated = True
 
+    def remove_exclude(self, x, y):
+        xi, yi = self.interpolate()
+        pi = util.argnearest(x, y, xi, yi)
+        for i, (s, e) in enumerate(self.exclude):
+            si = util.argnearest(*s, xi, yi)
+            ei = util.argnearest(*e, xi, yi)
+            ilb, iub = min(si, ei), max(si, ei)
+            if ilb <= pi <= iub:
+                self.exclude.pop(i)
+                self.updated = True
+                break
+
     def get_state(self):
         return {
             "x": self.x,

@@ -125,17 +125,17 @@ class LinePlot(PointPlot):
 
     def update_exclude(self, x, y):
         self.end_drag = x, y
-        self.redraw()
+        self.request_redraw()
 
     def end_exclude(self, keep=True):
         if keep:
             self.points.add_exclude(self.start_drag, self.end_drag)
         self.start_drag = None
         self.end_drag = None
-        self.redraw()
+        self.request_redraw()
 
     def remove_exclude(self, x, y):
-        pass
+        self.points.remove_exclude(x, y)
 
     def redraw(self, event=None):
         super().redraw()
