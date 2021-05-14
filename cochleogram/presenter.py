@@ -390,9 +390,11 @@ class Presenter(Atom):
             else:
                 self.current_cells_artist.visible = True
 
-    def set_interaction_mode(self, mode, submode):
-        self.interaction_mode = mode
-        self.interaction_submode = submode
+    def set_interaction_mode(self, mode=None, submode=None):
+        if mode is not None:
+            self.interaction_mode = mode
+        if submode is not None:
+            self.interaction_submode = submode
 
     def action_guess_cells(self, width=None, spacing=None):
         n = self.piece.guess_cells(self.interaction_mode, width, spacing)
@@ -412,11 +414,28 @@ class Presenter(Atom):
         self.piece.spirals[to_spiral].set_nodes(xn, yn)
 
     def key_press(self, event):
-        if self.interaction_mode == 'tiles':
-            return self.key_press_tiles(event)
+        key = event.key.lower()
+        if key == 's':
+            deferred_call(self.set_interaction_mode, None, 'spiral')
+        elif key == 'e':
+            deferred_call(self.set_interaction_mode, None, 'exclude')
+        elif key == 'c':
+            deferred_call(self.set_interaction_mode, None, 'cells')
+        elif key == 't':
+            deferred_call(self.set_interaction_mode, 'tiles', None)
+        elif key == 'i':
+            deferred_call(self.set_interaction_mode, 'IHC', None)
+        elif key == '1':
+            deferred_call(self.set_interaction_mode, 'OHC1', None)
+        elif key == '2':
+            deferred_call(self.set_interaction_mode, 'OHC2', None)
+        elif key == '3':
+            deferred_call(self.set_interaction_mode, 'OHC3', None)
+        elif self.interaction_mode == 'tiles':
+            self.key_press_tiles(event)
         else:
             if self.interaction_submode == 'exclude':
-                if event.key == 'escape' and self.drag_event is not None:
+                if key == 'escape' and self.drag_event is not None:
                     self.end_drag(event, keep=False)
 
     def key_press_tiles(self, event):

@@ -146,8 +146,9 @@ enamldef MPLDockItem(DockItem):
                     group = mode_group
                     checkable = True
                     checked << loop_item == presenter.interaction_mode
-                    checked ::
-                        presenter.interaction_mode = loop_item
+                    toggled ::
+                        if self.checked:
+                            presenter.interaction_mode = loop_item
 
         HGroup: submode_buttons:
             padding = 0
@@ -160,8 +161,9 @@ enamldef MPLDockItem(DockItem):
                     group = submode_group
                     checkable = True
                     checked << loop_item == presenter.interaction_submode
-                    checked ::
-                        presenter.interaction_submode = loop_item
+                    toggled ::
+                        if self.checked:
+                            presenter.interaction_mode = loop_item
 
         Label: action_label:
             text = 'Actions'
