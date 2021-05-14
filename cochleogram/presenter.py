@@ -28,12 +28,14 @@ from matplotlib import (
     patheffects,
     ticker,
 )
+from matplotlib import patches as mpatches
+from matplotlib import path as mpath
 
 import numpy as np
 from scipy import interpolate
 
 from cochleogram.model import Piece, Points, Tile
-from cochleogram.util import shortest_path
+from cochleogram.util import get_region, make_plot_path, shortest_path
 
 
 class PointPlot(Atom):
@@ -89,7 +91,13 @@ class PointPlot(Atom):
 class LinePlot(PointPlot):
 
     spline_artist = Value()
+    exclude_artist = Value()
+    new_exclude_artist = Value()
+
     has_spline = Bool(False)
+
+    start_drag = Value()
+    end_drag = Value()
 
     def __init__(self, axes, points, **kwargs):
         super().__init__(axes, points, **kwargs)
@@ -101,12 +109,56 @@ class LinePlot(PointPlot):
             [], [], "k-", zorder=90, path_effects=spline_effect
         )
 
+        verts = np.zeros((0, 2))
+        path = mpath.Path(verts, [])
+        self.new_exclude_artist = mpatches.PathPatch(path, facecolor='red', alpha=0.25, zorder=100)
+        axes.add_patch(self.new_exclude_artist)
+
+        verts = np.zeros((0, 2))
+        path = mpath.Path(verts, [])
+        self.exclude_artist = mpatches.PathPatch(path, facecolor='salmon', alpha=0.25, zorder=100)
+        axes.add_patch(self.exclude_artist)
+
+    def start_exclude(self, x, y):
+        self.start_drag = x, y
+        self.end_drag = None
+
+    def update_exclude(self, x, y):
+        self.end_drag = x, y
+        self.redraw()
+
+    def end_exclude(self, keep=True):
+        if keep:
+            self.points.add_exclude(self.start_drag, self.end_drag)
+        self.start_drag = None
+        self.end_drag = None
+        self.redraw()
+
+    def remove_exclude(self, x, y):
+        pass
+
     def redraw(self, event=None):
         super().redraw()
         xi, yi = self.points.interpolate()
         self.has_spline = len(xi) > 0
         self.spline_artist.set_data(xi, yi)
         self.spline_artist.set_visible(self.visible)
+        self.exclude_artist.set_visible(self.visible)
+        self.new_exclude_artist.set_visible(self.visible)
+
+        path = make_plot_path(self.points, self.points.exclude)
+        self.exclude_artist.set_path(path)
+
+        if self.start_drag and self.end_drag:
+            try:
+                regions = [(self.start_drag, self.end_drag)]
+                path = make_plot_path(self.points, regions)
+            except ValueError:
+                # This usually means that region is too small to begin drawing.
+                path = make_plot_path(self.points, [])
+        else:
+            path = make_plot_path(self.points, [])
+        self.new_exclude_artist.set_path(path)
 
 
 class ImagePlot(Atom):
@@ -234,7 +286,6 @@ class Presenter(Atom):
 
     # For spirals and cells
     point_artists = Dict()
-    current_point_artist = Property()
     current_spiral_artist = Value()
     current_cells_artist = Value()
 
@@ -249,11 +300,15 @@ class Presenter(Atom):
     zorder_unselected = Int(10)
 
     interaction_mode = Enum("tiles", "IHC", "OHC1", "OHC2", "OHC3")
-    interaction_submode = Enum("spiral", "cells")
+    interaction_submode = Enum("spiral", "exclude", "cells")
 
     pan_event = Value()
     pan_xlim = Value()
     pan_ylim = Value()
+
+    drag_event = Value()
+    drag_x = Value()
+    drag_y = Value()
 
     spiral_empty = Bool(True)
     spiral_ready = Bool(False)
@@ -283,6 +338,7 @@ class Presenter(Atom):
         # Not sure why this is necessary
         self.axes.axis(self.piece.get_image_extent())
         self.saved_state = self.get_full_state()
+        self.drag_event = None
 
     def _observe_saved_state(self, event):
         self.check_for_changes()
@@ -305,9 +361,6 @@ class Presenter(Atom):
     def _get_current_artist(self):
         return list(self.tile_artists.values())[self.current_artist_index]
 
-    def _get_current_point_artist(self):
-        return self.point_artists[self.interaction_mode, self.interaction_submode]
-
     @observe("highlight_selected",)
     def update_highlight(self, event=None):
         alpha = self.alpha_unselected if self.highlight_selected else 1
@@ -322,33 +375,6 @@ class Presenter(Atom):
         self.current_artist.zorder = self.zorder_selected
         self.redraw()
 
-    def button_press(self, event):
-        if event.button == MouseButton.RIGHT and event.xdata is not None:
-            self.start_pan(event)
-        elif self.interaction_mode == 'tiles':
-            self.button_press_tiles(event)
-        else:
-            self.button_press_point_plot(event)
-
-    def button_press_tiles(self, event):
-        if event.button == MouseButton.LEFT and event.xdata is not None:
-            for i, artist in enumerate(self.tile_artists.values()):
-                if artist.contains(event.xdata, event.ydata):
-                    self.current_artist_index = i
-                    break
-
-    def button_press_point_plot(self, event):
-        if event.button != MouseButton.LEFT:
-            return
-        if event.key == "shift" and event.xdata is not None:
-            self.current_point_artist.remove_point(event.xdata, event.ydata)
-        elif event.key is None and event.xdata is not None:
-            self.current_point_artist.add_point(event.xdata, event.ydata)
-
-    def button_release(self, event):
-        if event.button == MouseButton.RIGHT:
-            self.end_pan(event)
-
     @observe('interaction_mode', 'interaction_submode')
     def _update_plots(self, event=None):
         for artist in self.point_artists.values():
@@ -359,7 +385,10 @@ class Presenter(Atom):
         else:
             self.current_spiral_artist = self.point_artists[self.interaction_mode, 'spiral']
             self.current_cells_artist = self.point_artists[self.interaction_mode, 'cells']
-            self.current_point_artist.visible = True
+            if self.interaction_submode in ('spiral', 'exclude'):
+                self.current_spiral_artist.visible = True
+            else:
+                self.current_cells_artist.visible = True
 
     def set_interaction_mode(self, mode, submode):
         self.interaction_mode = mode
@@ -385,6 +414,10 @@ class Presenter(Atom):
     def key_press(self, event):
         if self.interaction_mode == 'tiles':
             return self.key_press_tiles(event)
+        else:
+            if self.interaction_submode == 'exclude':
+                if event.key == 'escape' and self.drag_event is not None:
+                    self.end_drag(event, keep=False)
 
     def key_press_tiles(self, event):
         if event.key in ["right", "left", "up", "down"]:
@@ -403,19 +436,60 @@ class Presenter(Atom):
     def _observe_current_artist_index(self, event):
         self.update_highlight()
 
+    def button_press(self, event):
+        if event.button == MouseButton.RIGHT and event.xdata is not None:
+            self.start_pan(event)
+        elif self.interaction_mode == 'tiles':
+            self.button_press_tiles(event)
+        else:
+            self.button_press_point_plot(event)
+
+    def button_press_tiles(self, event):
+        if event.button == MouseButton.LEFT and event.xdata is not None:
+            for i, artist in enumerate(self.tile_artists.values()):
+                if artist.contains(event.xdata, event.ydata):
+                    self.current_artist_index = i
+                    break
+
+    def button_press_point_plot(self, event):
+        if event.button != MouseButton.LEFT:
+            return
+        if event.key == "shift" and event.xdata is not None:
+            if self.interaction_submode == 'cell':
+                self.point_artists[self.interaction_mode, 'cell'].remove_point(event.xdata, event.ydata)
+            elif self.interaction_submode == 'spiral':
+                self.point_artists[self.interaction_mode, 'spiral'].remove_point(event.xdata, event.ydata)
+            elif self.interaction_submode == 'exclude':
+                self.point_artists[self.interaction_mode, 'spiral'].remove_exclude(event.xdata, event.ydata)
+        elif event.key is None and event.xdata is not None:
+            if self.interaction_submode == 'cell':
+                self.point_artists[self.interaction_mode, 'cell'].add_point(event.xdata, event.ydata)
+            elif self.interaction_submode == 'spiral':
+                self.point_artists[self.interaction_mode, 'spiral'].add_point(event.xdata, event.ydata)
+            elif self.interaction_submode == 'exclude':
+                if self.drag_event is None:
+                    self.start_drag(event)
+                else:
+                    self.end_drag(event, keep=True)
+
+    def button_release(self, event):
+        if event.button == MouseButton.RIGHT:
+            self.end_pan(event)
+
     def motion(self, event):
-        if event.xdata is not None:
-            self.pan(event)
+        if self.pan_event is not None:
+            self.motion_pan(event)
+        elif self.drag_event is not None:
+            self.motion_drag(event)
 
     def start_pan(self, event):
         self.pan_event = event
         self.pan_xlim = self.axes.get_xlim()
         self.pan_ylim = self.axes.get_ylim()
 
-    def end_pan(self, event):
-        self.pan_event = None
-
-    def pan(self, event):
+    def motion_pan(self, event):
+        if event.xdata is None:
+            return
         if self.pan_event is None:
             return
         dx = event.xdata - self.pan_event.xdata
@@ -425,6 +499,23 @@ class Presenter(Atom):
         self.axes.set_xlim(self.pan_xlim)
         self.axes.set_ylim(self.pan_ylim)
         self.redraw()
+
+    def end_pan(self, event):
+        self.pan_event = None
+
+    def start_drag(self, event):
+        self.drag_event = event
+        self.current_spiral_artist.start_exclude(event.xdata, event.ydata)
+
+    def motion_drag(self, event):
+        if event.xdata is None:
+            self.end_drag(event, keep=False)
+        else:
+            self.current_spiral_artist.update_exclude(event.xdata, event.ydata)
+
+    def end_drag(self, event, keep):
+        self.current_spiral_artist.end_exclude(keep=keep)
+        self.drag_event = None
 
     def scroll(self, event):
         """

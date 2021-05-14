@@ -2,6 +2,8 @@ import re
 from pathlib import Path
 import pickle
 
+
+from matplotlib import path as mpath
 import numpy as np
 import pandas as pd
 from scipy import ndimage, signal
@@ -9,13 +11,54 @@ from scipy import ndimage, signal
 from aicspylibczi import CziFile
 
 
+def get_region(spline, start, end):
+    x1, y1 = start
+    x2, y2 = end
+    xi, yi = spline.interpolate(resolution=0.001)
+    i1 = argnearest(x1, y1, xi, yi)
+    i2 = argnearest(x2, y2, xi, yi)
+    ilb = min(i1, i2)
+    iub = max(i1, i2)
+    xs, ys = xi[ilb:iub], yi[ilb:iub]
+    return xs, ys
+
+
+def make_plot_path(spline, regions):
+    if len(regions) == 0:
+        verts = np.zeros((0, 2))
+        return mpath.Path(verts, [])
+
+    path_data = []
+    for s, e in regions:
+        xs, ys = get_region(spline, s, e)
+        xe, ye = expand_path(xs, ys, 15e-6)
+        xlb, xub = xe[0, :], xe[-1, :]
+        ylb, yub = ye[0, :], ye[-1, :]
+        xc = np.r_[xlb[1:], xub[::-1]]
+        yc = np.r_[ylb[1:], yub[::-1]]
+        path_data.append((mpath.Path.MOVETO, [xlb[0], ylb[0]]))
+        for x, y in zip(xc, yc):
+            path_data.append((mpath.Path.LINETO, (x, y)))
+        path_data.append((mpath.Path.CLOSEPOLY, [xlb[0], ylb[0]]))
+    codes, verts = zip(*path_data)
+    return mpath.Path(verts, codes)
+
+
+def argnearest(x, y, xa, ya):
+    xd = np.array(xa) - x
+    yd = np.array(ya) - y
+    d = np.sqrt(xd ** 2 + yd ** 2)
+    return np.argmin(d)
+
+
 def expand_path(x, y, width):
     v = x + y * 1j
     a = np.angle(np.diff(v)) + np.pi / 2
+    a = np.pad(a, (1, 0), mode='edge')
     dx = width * np.cos(a)
     dy = width * np.sin(a)
-    x = np.linspace(x[1:] - dx, x[1:] + dx, 100)
-    y = np.linspace(y[1:] - dy, y[1:] + dy, 100)
+    x = np.linspace(x - dx, x + dx, 100)
+    y = np.linspace(y - dy, y + dy, 100)
     return x, y
 
 

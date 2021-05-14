@@ -1,12 +1,12 @@
 from enaml.application import deferred_call
 from enaml.core.api import Looper
-from enaml.layout.api import align, hbox, InsertTab, spacer, vbox
+from enaml.layout.api import align, hbox, InsertTab, spacer, TabLayout, vbox
 from enaml.stdlib.fields import FloatField
 from enaml.stdlib.message_box import information, question
 from enaml.widgets.api import (Action, ButtonGroup, CheckBox, Container,
-                               DockArea, DockItem, FileDialogEx, HGroup, Label,
-                               MainWindow, Menu, MenuBar, MPLCanvas,
-                               ObjectCombo, PushButton, Slider)
+                               DockArea, DockItem, FileDialogEx, Form, HGroup,
+                               Html, Label, MainWindow, Menu, MenuBar,
+                               MPLCanvas, ObjectCombo, PushButton, Slider)
 
 
 def bind(figure, presenter):
@@ -153,7 +153,7 @@ enamldef MPLDockItem(DockItem):
             padding = 0
             spacing = 0
             Looper:
-                iterable = ['spiral', 'bad regions', 'cells']
+                iterable = ['spiral', 'exclude', 'cells']
                 PushButton:
                     enabled << presenter.interaction_mode != 'tiles'
                     text = loop_item
@@ -267,3 +267,41 @@ enamldef CochleagramWindow(MainWindow): window:
     Container:
         DockArea: workspace:
             name = 'dock_area'
+
+            layout = TabLayout('help')
+
+            DockItem:
+                name = 'help'
+                title = 'Help'
+                closable = False
+
+                Container:
+                    Html:
+                        source = '''
+                        <h3>General interaction</h3>
+                        <dl>
+                            <dt>right click + drag</dt> <dd>Pan image</dd>
+                            <dt>mouse wheel</dt> <dd>Zoom</dd>
+                        </dl>
+
+                        <h3>Tile mode</h3>
+                        <dl>
+                            <dt>left click</dt> <dd>Select tile</dd>
+                            <dt>n</dt> <dd>Select next tile</dd>
+                            <dt>p</dt> <dd>Select previous tile</dd>
+                        </dl>
+
+                        <h3>Spiral mode</h3>
+                        <p>You must select a minimum of four points to create
+                        the spiral. You can add points in between existing
+                        points and the spiral will be rerouted through those
+                        points. The algorithm assumes that the "next" point in
+                        the path is the one closest to it (i.e., the order in
+                        which you add the points does not matter).</p>
+                        <dl>
+                            <dt>left click</dt> <dd>Add point</dd>
+                            <dt>shift + left click</dt> <dd>Remove point</dd>
+                            <dt>alt + left drag</dt> <dd>Mark region as bad</dd>
+                            <dt>shift + alt + left drag</dt> <dd>Remove bad region</dd>
+                        </dl>
+                        '''

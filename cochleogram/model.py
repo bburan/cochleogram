@@ -17,12 +17,15 @@ class Points(Atom):
     x = List()
     y = List()
     i = Int()
+    exclude = List()
+
     updated = Event()
 
-    def __init__(self, x=None, y=None, i=0):
+    def __init__(self, x=None, y=None, i=0, exclude=None):
         self.x = [] if x is None else x
         self.y = [] if y is None else y
         self.i = i
+        self.exclude = [] if exclude is None else exclude
 
     def expand_nodes(self, distance):
         '''
@@ -67,7 +70,7 @@ class Points(Atom):
             return list(zip(*path))
         return [(), ()]
 
-    def interpolate(self, degree=3, smoothing=0, resolution=0.01):
+    def interpolate(self, degree=3, smoothing=0, resolution=0.001):
         nodes = self.get_nodes()
         if len(nodes[0]) <= 3:
             return [], []
@@ -85,6 +88,7 @@ class Points(Atom):
         if not self.has_node(x, y, hit_threshold):
             self.x.append(x)
             self.y.append(y)
+            self.update_exclude()
             self.updated = True
 
     def has_node(self, x, y, hit_threshold):
@@ -104,25 +108,53 @@ class Points(Atom):
         raise ValueError('No node nearby')
 
     def remove_node(self, x, y, hit_threshold=25e-6):
-        try:
-            i = self.find_node(x, y, hit_threshold)
-            self.x.pop(i)
-            self.y.pop(i)
-            self.updated = True
-        except ValueError:
-            pass
+        i = self.find_node(x, y, hit_threshold)
+        self.x.pop(i)
+        self.y.pop(i)
+        self.update_exclude()
+        self.updated = True
+
+    def nearest_point(self, x, y):
+        xi, yi = self.interpolate()
+        xd = np.array(xi) - x
+        yd = np.array(yi) - y
+        d = np.sqrt(xd ** 2 + yd ** 2)
+        i = np.argmin(d)
+        return xi[i], yi[i]
+
+    def add_exclude(self, start, end):
+        start = self.nearest_point(*start)
+        end = self.nearest_point(*end)
+        self.exclude.append((start, end))
+        self.updated = True
+
+    def update_exclude(self):
+        new_exclude = []
+        for s, e in self.exclude:
+            try:
+                s = self.nearest_point(*s)
+                e = self.nearest_point(*e)
+                if s == e:
+                    continue
+                new_exclude.append((s, e))
+            except:
+                pass
+        self.exclude = new_exclude
+        self.updated = True
 
     def get_state(self):
         return {
             "x": self.x,
             "y": self.y,
             "i": self.i,
+            "exclude": self.exclude,
         }
 
     def set_state(self, state):
         self.x = state["x"]
         self.y = state["y"]
         self.i = state["i"]
+        self.exclude = state["exclude"]
         self.updated = True
 
 
@@ -356,9 +388,5 @@ class Cochlea:
 
     @classmethod
     def from_path(cls, path):
-        p_piece = re.compile('.*piece (\d+)\w?')
-        pieces = []
-        for piece_path in Path(path).glob('*piece*.pkl'):
-            p = int(p_piece.match(piece_path.stem).group(1))
-            pieces.append(Piece.from_path(path, p))
+        pieces = [Piece.from_path(path, p) for p in util.list_pieces(path)]
         return cls(pieces, path)
