@@ -1,16 +1,8 @@
 import argparse
 from pathlib import Path
 
-import enaml
-from enaml.qt.qt_application import QtApplication
-
 from cochleogram.model import Piece
-from cochleogram.presenter import Presenter
-from cochleogram.util import list_pieces
-
-with enaml.imports():
-    from cochleogram.gui import CochleagramWindow
-
+from cochleogram.util import list_pieces, load_data
 
 def main_prepare():
     parser = argparse.ArgumentParser('Create cached files for cochleogram')
@@ -18,10 +10,12 @@ def main_prepare():
 
     args = parser.parse_args()
     src = Path(args.path)
-    for piece in list_pieces(src / 'cochleograms'):
-        # We don't need to do anything. Just create the cache.
-        print(f'Processing piece {piece}')
-        Piece.from_path(src / 'cochleograms', piece)
+    cochleogram_path = src / 'cochleograms'
+    for filename in cochleogram_path.glob('*.czi'):
+        # We don't need to do anything. Just create the cache which occurs when
+        # we load data for the first time.
+        print(f'Processing file {filename}')
+        _ = load_data(filename)
 
     src_cache = src / 'cochleograms' / 'processed' / 'max_xy_512_dtype_uint8'
     dest = src / 'cochleogram_analysis'
@@ -29,6 +23,14 @@ def main_prepare():
 
 
 def main():
+    import enaml
+    from enaml.qt.qt_application import QtApplication
+
+    from cochleogram.presenter import Presenter
+
+    with enaml.imports():
+        from cochleogram.gui import CochleagramWindow
+
     parser = argparse.ArgumentParser("Cochleogram helper")
     parser.add_argument("path", nargs='?')
     parser.add_argument("--piece")
