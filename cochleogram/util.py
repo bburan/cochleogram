@@ -173,7 +173,7 @@ def load_data(filename, max_xy=512, dtype='uint8', reload=False):
     info["offset"] = np.array([x_offset, y_offset, z_offset])
     info["pixels"] = np.array([x_pixels, y_pixels, z_pixels]).astype("i")
     info["scaling"] = np.array([x_scaling, y_scaling, z_scaling])
-    info["origin"] = np.array([float(v) * 1e-6 for v in node.values()])
+    info["origin"] = np.array([float(v) * 1e-6 for k, v in node.items()])
     info["lower"] = info["origin"]
     info["extent"] = info["pixels"] * info["scaling"]
     info["upper"] = info["lower"] + info["extent"]
