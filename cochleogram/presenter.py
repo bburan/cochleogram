@@ -512,7 +512,7 @@ class Presenter(Atom):
                 self.point_artists[self.interaction_mode, 'spiral'].remove_point(event.xdata, event.ydata)
             elif self.interaction_submode == 'exclude':
                 self.point_artists[self.interaction_mode, 'spiral'].remove_exclude(event.xdata, event.ydata)
-        elif event.key is None and event.xdata is not None:
+        elif event.xdata is not None:
             if self.interaction_submode == 'cells':
                 self.point_artists[self.interaction_mode, 'cells'].add_point(event.xdata, event.ydata)
             elif self.interaction_submode == 'spiral':
