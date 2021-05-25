@@ -33,7 +33,7 @@ def add_dock_item(dock_area, presenter):
 def save_state(parent, presenters):
     q = 'Your previous analysis will be overwritten. Are you sure?'
     button = question(parent, 'Confirm action', q)
-    if button.text == 'Yes':
+    if button is not None and button.text == 'Yes':
         for presenter in presenters:
             presenter.save_state()
         information(parent, 'Analysis saved', 'Analysis has been saved.')
@@ -43,7 +43,7 @@ def load_state(parent, presenters):
     if any(p.unsaved_changes for p in presenters):
         q = 'There are unsaved changes. Your current analysis will be lost. Are you sure?'
         button = question(parent, 'Confirm action', q)
-        if button.text == 'No':
+        if button is not None and button.text == 'No':
             return
     for presenter in presenters:
         presenter.load_state()
@@ -196,7 +196,7 @@ enamldef MPLDockItem(DockItem):
             enabled << presenter.current_spiral_artist is not None and presenter.current_spiral_artist.has_nodes
             clicked ::
                 button = question(self, 'Confirm action', 'Are you sure you want to remove the current spiral?')
-                if button.text == 'Yes':
+                if button is not None and button.text == 'Yes':
                     presenter.action_clear_spiral()
 
         PushButton: action_clear_cells:
@@ -204,7 +204,7 @@ enamldef MPLDockItem(DockItem):
             enabled << presenter.current_cells_artist is not None and presenter.current_cells_artist.has_nodes
             clicked ::
                 button = question(self, 'Confirm action', 'Are you sure you want to remove the current cells?')
-                if button.text == 'Yes':
+                if button is not None and button.text == 'Yes':
                     presenter.action_clear_cells()
 
         PushButton: load_analysis:
@@ -237,7 +237,7 @@ enamldef MPLDockItem(DockItem):
                 text = 'update'
                 clicked ::
                     button = question(self, 'Confirm action', f'Are you sure you want to overwrite the existing cells?')
-                    if button.text == 'Yes':
+                    if button is not None and button.text == 'Yes':
                         n = presenter.action_guess_cells(guess_width.value * 1e-6, guess_spacing.value * 1e-6)
                         information(self, 'Info', f'Found {n} cells')
 
@@ -287,7 +287,7 @@ enamldef CochleagramWindow(MainWindow): window:
     closing ::
         if any(p.unsaved_changes for p in presenters):
             button = question(window, 'Question', 'There are unsaved changes. Are you sure you want to exit?')
-            if button.text == 'No':
+            if button is None or button.text == 'No':
                 change['value'].ignore()
 
     Container:
