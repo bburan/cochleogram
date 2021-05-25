@@ -3,6 +3,7 @@ from enaml.core.api import Looper
 from enaml.layout.api import align, hbox, InsertTab, spacer, TabLayout, vbox
 from enaml.stdlib.fields import FloatField
 from enaml.stdlib.message_box import information, question
+from enaml.qt.QtCore import Qt
 from enaml.widgets.api import (Action, ButtonGroup, CheckBox, Container,
                                DockArea, DockItem, FileDialogEx, Form, HGroup,
                                Html, Label, MainWindow, Menu, MenuBar,
@@ -53,12 +54,32 @@ def load_state(parent, presenters):
 CELLS = ['IHC', 'OHC1', 'OHC2', 'OHC3']
 
 
+class CochleogramCanvas(MPLCanvas):
+
+    def set_focus(self, event=None):
+        self.figure.canvas.setFocus(Qt.OtherFocusReason)
+
+
+def bind_focus(items, cb):
+    observe = ['toggled', 'selected', 'value', 'clicked']
+    for item in items:
+        for o in observe:
+            if hasattr(item, o):
+                item.observe(o, cb)
+        if getattr(item, 'children', []):
+            bind_focus(item.children, cb)
+
+
 enamldef MPLDockItem(DockItem):
 
     attr presenter
     closable = False
 
     title << 'Piece {}{}'.format(presenter.piece.piece, '*' if presenter.unsaved_changes else '')
+
+    initialized ::
+        bind_focus(container.children, canvas.set_focus)
+        deferred_call(canvas.set_focus)
 
     Container: container:
         constraints = [
@@ -89,7 +110,7 @@ enamldef MPLDockItem(DockItem):
 
         ObjectCombo: display_channel:
             items = ['All', 'CtBP2', 'MyosinVIIa']
-            selected << presenter.current_artist.display_channel
+            selected << 'All' if presenter.current_artist is None else presenter.current_artist.display_channel
             selected ::
                 presenter.set_display_channel(selected, display_apply.checked)
 
@@ -98,7 +119,7 @@ enamldef MPLDockItem(DockItem):
 
         ObjectCombo: display_mode:
             items = ['projection', 'slice']
-            selected << presenter.current_artist.display_mode
+            selected << 'projection' if presenter.current_artist is None else presenter.current_artist.display_mode
             selected ::
                 presenter.set_display_mode(selected, display_apply.checked)
 
@@ -109,11 +130,11 @@ enamldef MPLDockItem(DockItem):
         Slider: z_slice:
             enabled << display_mode.selected == 'slice'
             tick_interval = 1
-            value << presenter.current_artist.z_slice
+            value << 0 if presenter.current_artist is None else presenter.current_artist.z_slice
             value ::
                 presenter.set_z_slice(value, display_apply.checked)
-            minimum << presenter.current_artist.z_slice_min
-            maximum << presenter.current_artist.z_slice_max
+            minimum << 0 if presenter.current_artist is None else presenter.current_artist.z_slice_min
+            maximum << 0 if presenter.current_artist is None else presenter.current_artist.z_slice_max
 
         PushButton: display_apply:
             text = 'Apply to all tiles'
@@ -220,7 +241,7 @@ enamldef MPLDockItem(DockItem):
                         n = presenter.action_guess_cells(guess_width.value * 1e-6, guess_spacing.value * 1e-6)
                         information(self, 'Info', f'Found {n} cells')
 
-        MPLCanvas: canvas:
+        CochleogramCanvas: canvas:
             figure << presenter.figure
             toolbar_visible = False
             initialized ::
