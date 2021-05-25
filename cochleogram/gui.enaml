@@ -375,6 +375,8 @@ enamldef CochleagramWindow(MainWindow): window:
                         <h3>General interaction</h3>
                         <dl>
                             <dt>right click + drag</dt> <dd>Pan image</dd>
+                            <dt>arrow keys</dt><dd>When a tile is not selected, you can use the arrow keys to pan the view (large step)</dd>
+                            <dt>shift + arrow keys</dt><dd>When a tile is not selected, you can use the arrow keys to pan the view (small step)</dd>
                             <dt>mouse wheel</dt> <dd>Zoom</dd>
                             <dt>t</dt> <dd>Select tile mode</dd>
                             <dt>i</dt> <dd>Select IHC mode</dd>
@@ -447,4 +449,10 @@ enamldef CochleagramWindow(MainWindow): window:
                             <dt>alt + left click</dt> <dd>Remove region</dd>
                             <dt>escape</dt> <dd>Cancel current region</dd>
                         </dl>
+                        <p>Some tools are made available to facilitate this process.</p>
+                        <ul>
+                            <li>You can copy a set of excluded regions to any other spiral.</li>
+                            <li>You can merge all excluded regions across the OHC spirals into a single set of excluded regions that apply to all OHC spirals.</li>
+                            <li>You can simplify a set of excluded regions for a particular spiral if they are overlapping (this will combine overlapping exclusion regions into a single exclusion region).</li>
+                        </ul>
                         '''
