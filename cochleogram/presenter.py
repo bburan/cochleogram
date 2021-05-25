@@ -281,8 +281,8 @@ class Presenter(Atom):
 
     # Tile artists
     tile_artists = Dict()
-    current_artist_index = Int()
-    current_artist = Property()
+    current_artist_index = Value()
+    current_artist = Value()
 
     # For spirals and cells
     point_artists = Dict()
@@ -326,7 +326,7 @@ class Presenter(Atom):
         }
         for artist in self.tile_artists.values():
             artist.observe('updated', self.update)
-        self.current_artist_index = 0
+        self.current_artist_index = None
         for key in ('IHC', 'OHC1', 'OHC2', 'OHC3'):
             cells = PointPlot(self.axes, self.piece.cells[key], name=key)
             spiral = LinePlot(self.axes, self.piece.spirals[key], name=key)
@@ -358,8 +358,12 @@ class Presenter(Atom):
     def _default_axes(self):
         return self.figure.add_axes([0.1, 0.1, 0.8, 0.8])
 
-    def _get_current_artist(self):
-        return list(self.tile_artists.values())[self.current_artist_index]
+    def _observe_current_artist_index(self, event):
+        if self.current_artist_index is None:
+            self.current_artist = None
+        else:
+            self.current_artist = list(self.tile_artists.values())[self.current_artist_index]
+        self.update_highlight()
 
     @observe("highlight_selected",)
     def update_highlight(self, event=None):
@@ -368,11 +372,12 @@ class Presenter(Atom):
             artist.zorder = self.zorder_unselected
             artist.alpha = alpha
             artist.highlight = False
-        if self.highlight_selected:
-            self.current_artist.alpha = self.alpha_selected
-            self.current_artist.rectangle.set_alpha(1)
-            self.current_artist.highlight = True
-        self.current_artist.zorder = self.zorder_selected
+        if self.current_artist is not None:
+            if self.highlight_selected:
+                self.current_artist.alpha = self.alpha_selected
+                self.current_artist.rectangle.set_alpha(1)
+                self.current_artist.highlight = True
+            self.current_artist.zorder = self.zorder_selected
         self.redraw()
 
     @observe('interaction_mode', 'interaction_submode')
@@ -431,29 +436,45 @@ class Presenter(Atom):
             deferred_call(self.set_interaction_mode, 'OHC2', None)
         elif key == '3':
             deferred_call(self.set_interaction_mode, 'OHC3', None)
-        elif self.interaction_mode == 'tiles':
+        elif (key == 'escape') and (self.drag_event is not None) and (self.interaction_submode == 'exclude'):
+            self.end_drag(event, keep=False)
+        elif self.interaction_mode == 'tiles' and self.current_artist is not None:
             self.key_press_tiles(event)
         else:
-            if self.interaction_submode == 'exclude':
-                if key == 'escape' and self.drag_event is not None:
-                    self.end_drag(event, keep=False)
+            self.key_press_point_plot(event)
 
     def key_press_tiles(self, event):
         if event.key in ["right", "left", "up", "down"]:
-            self.current_artist.move_image(event.key)
+            if self.current_artist is not None:
+                self.current_artist.move_image(event.key)
         elif event.key in ["shift+right", "shift+left", "shift+up", "shift+down"]:
-            self.current_artist.move_image(event.key.split('+')[1], 0.25)
-        elif event.key.lower() == "n":
-            self.current_artist_index = int(
-                np.clip(self.current_artist_index + 1, 0, len(self.tile_artists) - 1)
-            )
-        elif event.key.lower() == "p":
-            self.current_artist_index = int(
-                np.clip(self.current_artist_index - 1, 0, len(self.tile_artists) - 1)
-            )
+            if self.current_artist is not None:
+                self.current_artist.move_image(event.key.split('+')[1], 0.25)
 
-    def _observe_current_artist_index(self, event):
-        self.update_highlight()
+        elif event.key.lower() == "n":
+            i = -1 if self.current_artist_index is None else self.current_artist_index
+            self.current_artist_index = int(np.clip(i + 1, 0, len(self.tile_artists) - 1))
+        elif event.key.lower() == "p":
+            i = len(self.tile_artists) + 1 if self.current_artist_index is None else self.current_artist_index
+            self.current_artist_index = int(np.clip(i - 1, 0, len(self.tile_artists) - 1))
+
+    def key_press_point_plot(self, event):
+        if event.key.startswith('shift+'):
+            direction = event.key.split('+')[1]
+            scale = 0.025
+        else:
+            direction = event.key
+            scale = 0.1
+
+        if direction in ["right", "left"]:
+            lb, ub = self.axes.get_xlim()
+            shift = (ub-lb) * scale * (1 if direction == 'right' else -1)
+            self.axes.set_xlim(lb + shift, ub + shift)
+        elif direction in ["up", "down"]:
+            lb, ub = self.axes.get_ylim()
+            shift = (ub-lb) * scale * (1 if event.key == 'up' else -1)
+            self.axes.set_ylim(lb + shift, ub + shift)
+        self.redraw()
 
     def button_press(self, event):
         if event.button == MouseButton.RIGHT and event.xdata is not None:
@@ -469,6 +490,8 @@ class Presenter(Atom):
                 if artist.contains(event.xdata, event.ydata):
                     self.current_artist_index = i
                     break
+            else:
+                self.current_artist_index = None
 
     def button_press_point_plot(self, event):
         if event.button != MouseButton.LEFT:
@@ -576,21 +599,21 @@ class Presenter(Atom):
         if all_tiles:
             for artist in self.tile_artists.values():
                 artist.display_mode = display_mode
-        else:
+        elif self.current_artist is not None:
             self.current_artist.display_mode = display_mode
 
     def set_display_channel(self, display_channel, all_tiles=False):
         if all_tiles:
             for artist in self.tile_artists.values():
                 artist.display_channel = display_channel
-        else:
+        elif self.current_artist is not None:
             self.current_artist.display_channel = display_channel
 
     def set_z_slice(self, z_slice, all_tiles=False):
         if all_tiles:
             for artist in self.tile_artists.values():
                 artist.z_slice = z_slice
-        else:
+        elif self.current_artist is not None:
             self.current_artist.z_slice = z_slice
 
     def get_state(self):
