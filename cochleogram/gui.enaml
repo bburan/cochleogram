@@ -91,6 +91,7 @@ enamldef MPLDockItem(DockItem):
                 hbox(action_label, action_clear_spiral, action_clear_cells,
                      spacer, load_analysis, save_analysis, spacing=0),
                 action_guess_cells,
+                action_copy_exclusion,
                 canvas,
             ),
             align('v_center', display_label, display_channel, display_as_label,
@@ -101,7 +102,7 @@ enamldef MPLDockItem(DockItem):
                   action_clear_cells),
             align('left', display_label, mode_label, action_label),
             align('left', display_channel, mode_buttons, action_clear_spiral,
-                  action_guess_cells),
+                  action_guess_cells, action_copy_exclusion),
             submode_buttons.children[0].width == mode_buttons.children[0].width,
         ]
 
@@ -240,6 +241,28 @@ enamldef MPLDockItem(DockItem):
                     if button is not None and button.text == 'Yes':
                         n = presenter.action_guess_cells(guess_width.value * 1e-6, guess_spacing.value * 1e-6)
                         information(self, 'Info', f'Found {n} cells')
+
+        HGroup: action_copy_exclusion:
+            padding = 0
+            align_widths = False
+            trailing_spacer = spacer(0)
+            enabled << presenter.current_spiral_artist is not None and presenter.current_spiral_artist.has_exclusion
+            Label:
+                text = 'Copy excluded regions to'
+            ObjectCombo: copy_exclusion_to:
+                items << [c for c in CELLS if c != presenter.interaction_mode]
+
+            PushButton:
+                text = 'Copy'
+                clicked ::
+                    m = f'Are you sure you want to copy the excluded regions to {copy_exclusion_to.selected}?\n' \
+                        f'The exclusion regions will be merged with any already-defined regions on {copy_exclusion_to.selected}.'
+                    button = question(self, 'Confirm action', m)
+                    if button is not None and button.text == 'Yes':
+                        try:
+                            presenter.action_copy_exclusion(copy_exclusion_to.selected)
+                        except Exception as e:
+                            information(self, 'Error', str(e))
 
         CochleogramCanvas: canvas:
             figure << presenter.figure

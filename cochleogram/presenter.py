@@ -95,6 +95,7 @@ class LinePlot(PointPlot):
     new_exclude_artist = Value()
 
     has_spline = Bool(False)
+    has_exclusion = Bool(False)
 
     start_drag = Value()
     end_drag = Value()
@@ -146,6 +147,7 @@ class LinePlot(PointPlot):
         self.exclude_artist.set_visible(self.visible)
         self.new_exclude_artist.set_visible(self.visible)
 
+        self.has_exclusion = len(self.points.exclude) > 0
         path = make_plot_path(self.points, self.points.exclude)
         self.exclude_artist.set_path(path)
 
@@ -417,6 +419,12 @@ class Presenter(Atom):
     def action_clone_spiral(self, to_spiral, distance):
         xn, yn = self.piece.spirals[self.interaction_mode].expand_nodes(distance)
         self.piece.spirals[to_spiral].set_nodes(xn, yn)
+
+    def action_copy_exclusion(self, to_spiral):
+        if not self.point_artists[to_spiral, 'spiral'].has_spline:
+            raise ValueError(f'Must create spiral for {to_spiral} first')
+        for s, e in self.piece.spirals[self.interaction_mode].exclude:
+            self.piece.spirals[to_spiral].add_exclude(s, e)
 
     def key_press(self, event):
         key = event.key.lower()
