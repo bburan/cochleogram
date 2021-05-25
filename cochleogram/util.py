@@ -220,3 +220,31 @@ def list_pieces(path):
         piece = int(p_piece.match(path.stem).group(1))
         pieces.append(piece)
     return sorted(set(pieces))
+
+
+def smooth_epochs(epochs):
+    '''
+    Given a 2D array of epochs in the format [[start time, end time], ...],
+    identify and remove all overlapping epochs such that::
+        [ epoch   ]        [ epoch ]
+            [ epoch ]
+    Will become::
+        [ epoch     ]      [ epoch ]
+    Epochs do not need to be ordered when provided; however, they will be
+    returned ordered.
+    '''
+    if len(epochs) == 0:
+        return epochs
+    epochs = np.asarray(epochs)
+    epochs.sort(axis=0)
+    i = 0
+    n = len(epochs)
+    smoothed = []
+    while i < n:
+        lb, ub = epochs[i]
+        i += 1
+        while (i < n) and (ub >= epochs[i,0]):
+            ub = epochs[i,1]
+            i += 1
+        smoothed.append((lb, ub))
+    return np.array(smoothed)

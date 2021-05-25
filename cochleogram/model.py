@@ -154,6 +154,19 @@ class Points(Atom):
                 self.updated = True
                 break
 
+    def simplify_exclude(self):
+        xi, yi = self.interpolate()
+        indices = []
+        for s, e in self.exclude:
+            si = util.argnearest(*s, xi, yi)
+            ei = util.argnearest(*e, xi, yi)
+            si, ei = min(si, ei), max(si, ei)
+            indices.append([si, ei])
+
+        indices = util.smooth_epochs(indices)
+        self.exclude = [[[xi[si], yi[si]], [xi[ei], yi[ei]]] for si, ei in indices]
+        self.updated = True
+
     def get_state(self):
         return {
             "x": self.x,

@@ -89,6 +89,7 @@ enamldef MPLDockItem(DockItem):
                      display_apply, highlight_selected),
                 hbox(mode_label, mode_buttons, submode_buttons, spacer),
                 hbox(action_label, action_clear_spiral, action_clear_cells,
+                     action_simplify_exclusions, action_merge_ohc_exclusions,
                      spacer, load_analysis, save_analysis, spacing=0),
                 action_guess_cells,
                 action_copy_exclusion,
@@ -99,7 +100,8 @@ enamldef MPLDockItem(DockItem):
                   highlight_selected),
             align('v_center', mode_label, mode_buttons),
             align('v_center', action_label, action_clear_spiral,
-                  action_clear_cells),
+                  action_clear_cells, action_simplify_exclusions,
+                  action_merge_ohc_exclusions),
             align('left', display_label, mode_label, action_label),
             align('left', display_channel, mode_buttons, action_clear_spiral,
                   action_guess_cells, action_copy_exclusion),
@@ -208,6 +210,37 @@ enamldef MPLDockItem(DockItem):
                 if button is not None and button.text == 'Yes':
                     presenter.action_clear_cells()
 
+        PushButton: action_simplify_exclusions:
+            text = 'Simplify exclusions'
+            enabled << presenter.current_spiral_artist is not None and presenter.current_spiral_artist.has_exclusion
+            clicked ::
+                m = f'Are you sure you want to simplify the excluded regions?'
+                button = question(self, 'Confirm action', m)
+                if button is not None and button.text == 'Yes':
+                    try:
+                        presenter.action_simplify_exclusion(presenter.interaction_mode)
+                    except Exception as e:
+                        information(self, 'Error', str(e))
+
+        PushButton: action_merge_ohc_exclusions:
+            text = 'Combine OHC exclusions'
+            enabled << presenter.point_artists['OHC1', 'spiral'].has_spline and \
+                presenter.point_artists['OHC2', 'spiral'].has_spline and \
+                presenter.point_artists['OHC3', 'spiral'].has_spline and (\
+                    presenter.point_artists['OHC1', 'spiral'].has_exclusion or \
+                    presenter.point_artists['OHC2', 'spiral'].has_exclusion or \
+                    presenter.point_artists['OHC3', 'spiral'].has_exclusion \
+                                                                          )
+            clicked ::
+                m = f'Are you sure you want to merge all OHC excluded regions together?\n' \
+                    'This will also simplify the excluded regions.'
+                button = question(self, 'Confirm action', m)
+                if button is not None and button.text == 'Yes':
+                    try:
+                        presenter.action_merge_exclusion('OHC1', 'OHC2', 'OHC3')
+                    except Exception as e:
+                        information(self, 'Error', str(e))
+
         PushButton: load_analysis:
             text = 'Load'
             clicked ::
@@ -251,7 +284,6 @@ enamldef MPLDockItem(DockItem):
                 text = 'Copy excluded regions to'
             ObjectCombo: copy_exclusion_to:
                 items << [c for c in CELLS if c != presenter.interaction_mode]
-
             PushButton:
                 text = 'Copy'
                 clicked ::

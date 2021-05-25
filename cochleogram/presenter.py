@@ -427,6 +427,20 @@ class Presenter(Atom):
         for s, e in self.piece.spirals[self.interaction_mode].exclude:
             self.piece.spirals[to_spiral].add_exclude(s, e)
 
+    def action_merge_exclusion(self, *spirals):
+        exclude = []
+        for spiral in spirals:
+            if not self.point_artists[spiral, 'spiral'].has_spline:
+                raise ValueError(f'Must create spiral for {to_spiral} first')
+            exclude.extend(self.piece.spirals[spiral].exclude)
+        for spiral in spirals:
+            self.piece.spirals[spiral].exclude = exclude
+            self.piece.spirals[spiral].simplify_exclude()
+
+    def action_simplify_exclusion(self, *spirals):
+        for spiral in spirals:
+            self.piece.spirals[spiral].simplify_exclude()
+
     def key_press(self, event):
         key = event.key.lower()
         if key == 's':
