@@ -211,9 +211,8 @@ class ImagePlot(Atom):
         super().__init__(**kwargs)
         self.tile = tile
         self.axes = axes
-        fmt = ticker.FuncFormatter(lambda x, i: f'{x*1e3:.2f}')
-        self.axes.xaxis.set_major_formatter(fmt)
-        self.axes.yaxis.set_major_formatter(fmt)
+        self.axes.xaxis.set_major_locator(ticker.NullLocator())
+        self.axes.yaxis.set_major_locator(ticker.NullLocator())
         self.artist = axes.imshow(np.zeros((0, 0)), origin="lower")
         self.rectangle = mp.patches.Rectangle((0, 0), 0, 0, ec='red', fc='None', zorder=5000)
         self.rectangle.set_alpha(0)
@@ -337,7 +336,9 @@ class Presenter(Atom):
             self.point_artists[key, 'cells'] = cells
             self.point_artists[key, 'spiral'] = spiral
 
-        # Not sure why this is necessary
+        # This is necessary because `imshow` will override some axis settings.
+        # We need to set them back to what we want.
+        self.axes.axis('equal')
         self.axes.axis(self.piece.get_image_extent())
         self.saved_state = self.get_full_state()
         self.drag_event = None
@@ -358,7 +359,7 @@ class Presenter(Atom):
         return Figure()
 
     def _default_axes(self):
-        return self.figure.add_axes([0.1, 0.1, 0.8, 0.8])
+        return self.figure.add_axes([0.05, 0.05, 0.9, 0.9])
 
     def _observe_current_artist_index(self, event):
         if self.current_artist_index is None:
