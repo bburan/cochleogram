@@ -277,6 +277,7 @@ enamldef CochleagramWindow(MainWindow): window:
     title = 'Cochelogram'
 
     attr presenters = []
+    attr current_path = ''
 
     MenuBar:
         Menu:
@@ -284,8 +285,9 @@ enamldef CochleagramWindow(MainWindow): window:
             Action:
                 text = 'Open\tCtrl+O'
                 triggered ::
-                    path = FileDialogEx.get_existing_directory(window)
+                    path = FileDialogEx.get_existing_directory(window, current_path=window.current_path)
                     if path:
+                        window.current_path = path
                         from cochleogram.model import Cochlea
                         cochlea = Cochlea.from_path(path)
                         window.presenters = [Presenter(p) for p in cochlea.pieces]

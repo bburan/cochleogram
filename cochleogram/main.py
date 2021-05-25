@@ -1,8 +1,31 @@
 import argparse
+import configparser
 from pathlib import Path
+
+from enaml.qt.QtCore import QStandardPaths
 
 from cochleogram.model import Piece
 from cochleogram.util import list_pieces, load_data
+
+
+def config_file():
+    config_path = Path(QStandardPaths.standardLocations(QStandardPaths.AppConfigLocation)[0])
+    config_file =  config_path / 'cochleogram' / 'config.ini'
+    config_file.parent.mkdir(exist_ok=True, parents=True)
+    return config_file
+
+
+def get_config():
+    config = configparser.ConfigParser()
+    config['DEFAULT'] = {'current_path': ''}
+    config.read(config_file())
+    return config
+
+
+def write_config(config):
+    with config_file().open('w') as fh:
+        config.write(fh)
+
 
 def main_prepare():
     parser = argparse.ArgumentParser('Create cached files for cochleogram')
@@ -37,6 +60,7 @@ def main():
     args = parser.parse_args()
 
     app = QtApplication()
+    config = get_config()
 
     if args.path is not None:
         pieces = list_pieces(args.path) if args.piece is None else [args.piece]
@@ -44,10 +68,13 @@ def main():
     else:
         presenters = []
 
-    view = CochleagramWindow(presenters=presenters)
+    current_path = config['DEFAULT']['current_path']
+    view = CochleagramWindow(presenters=presenters, current_path=current_path)
     view.show()
     app.start()
     app.stop()
+    config['DEFAULT']['current_path'] = str(Path(view.current_path).absolute())
+    write_config(config)
 
 
 if __name__ == "__main__":
