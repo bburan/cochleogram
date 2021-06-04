@@ -46,7 +46,10 @@ def load_state(parent, presenters):
         if button is not None and button.text == 'No':
             return
     for presenter in presenters:
-        presenter.load_state()
+        try:
+            presenter.load_state()
+        except Exception as e:
+            information(parent, 'Error', str(e))
     information(parent, 'Analysis loaded', 'Analysis has been loaded.')
 
 
@@ -324,7 +327,10 @@ enamldef CochleagramWindow(MainWindow): window:
                         cochlea = Cochlea.from_path(path)
                         window.presenters = [Presenter(p) for p in cochlea.pieces]
                         for p in window.presenters:
-                            p.load_state()
+                            try:
+                                p.load_state()
+                            except IOError:
+                                pass
                             deferred_call(add_dock_item, workspace, p)
 
             Action:

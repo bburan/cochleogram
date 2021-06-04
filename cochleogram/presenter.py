@@ -672,6 +672,8 @@ class Presenter(Atom):
 
     def load_state(self):
         state_filename = self.piece.path / f"piece_{self.piece.piece}.json"
+        if not state_filename.exists():
+            raise IOError('No saved analysis found')
         state = json.loads(state_filename.read_text())
         self.piece.set_state(state['data'])
         self.set_state(state['view'])
