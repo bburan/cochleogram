@@ -80,11 +80,14 @@ class Points(Atom):
         return xi, yi
 
     def set_nodes(self, x, y):
-        self.x = list(x)
-        self.y = list(y)
+        m = np.isnan(x) | np.isnan(y)
+        self.x = list(x[~m])
+        self.y = list(y[~m])
         self.updated = True
 
     def add_node(self, x, y, hit_threshold=2.5e-6):
+        if not (np.isfinite(x) and np.isfinite(y)):
+            raise ValueError('Point must be finite')
         if not self.has_node(x, y, hit_threshold):
             self.x.append(x)
             self.y.append(y)
@@ -176,8 +179,13 @@ class Points(Atom):
         }
 
     def set_state(self, state):
-        self.x = state["x"]
-        self.y = state["y"]
+        x = np.array(state["x"])
+        y = np.array(state["y"])
+        m = np.isnan(x) | np.isnan(y)
+        print(m)
+        print(x.shape)
+        self.x = x[~m].tolist()
+        self.y = y[~m].tolist()
         self.i = state["i"]
         self.exclude = state.get("exclude", [])
         self.updated = True
