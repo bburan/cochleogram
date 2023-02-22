@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 from scipy import ndimage, signal
 
-from aicspylibczi import CziFile
 
 
 def get_region(spline, start, end):
@@ -103,7 +102,83 @@ def shortest_path(x, y, i=0):
     return list(zip(*path))
 
 
-def load_data(filename, max_xy=512, dtype='uint8', reload=False):
+def list_lif_stacks(filename):
+    from readlif.reader import LifFile
+    fh = LifFile(filename)
+    return [stack.name for stack in fh.get_iter_image()]
+
+
+def load_lif(filename, piece, max_xy=512, dtype='uint8', reprocess=False):
+    filename = Path(filename)
+    cache_filename = (
+        filename.parent
+        / "cochleogram_analysis"
+        / (filename.stem + f'_{piece}.pkl')
+    )
+    if not reprocess and cache_filename.exists():
+        with cache_filename.open("rb") as fh:
+            return pickle.load(fh)
+
+    from readlif.reader import LifFile
+    from readlif.utilities import get_xml
+    fh = LifFile(filename)
+    for stack in fh.get_iter_image():
+        if stack.name == piece:
+            break
+    else:
+        raise ValueError(f'{piece} not found in {filename}')
+
+    root, _ = get_xml(filename)
+    node = root.find(f'.//Element[@Name="{piece}"]')
+    x_pos = float(node.find('.//FilterSettingRecord[@Attribute="XPos"]').attrib['Variant'])
+    y_pos = float(node.find('.//FilterSettingRecord[@Attribute="YPos"]').attrib['Variant'])
+    z_pos = float(node.find('.//DimensionDescription[@DimID="3"]').attrib['Origin'])
+
+    pixels = np.array(stack.dims[:3])
+    voxel_size = 1 / np.array(stack.scale[:3])
+    lower = np.array([x_pos, y_pos, z_pos]) * 1e6
+
+    zoom = max_xy / max(pixels[:2])
+    voxel_size[:2] /= zoom
+
+    shape = [max_xy, max_xy, stack.dims[2], stack.channels]
+    img = np.empty(shape, dtype=np.float32)
+    for c in range(stack.channels):
+        for z, s in enumerate(stack.get_iter_z(c=c)):
+            #img[:, :, z, c] = ndimage.zoom(s, (zoom, zoom))[:, ::-1].T
+            img[:, :, z, c] = ndimage.zoom(s, (zoom, zoom))
+
+    # Z-step was negative. Flip stack to fix this.
+    if voxel_size[2] < 0:
+        img = img[:, :, ::-1]
+        voxel_size[2] = -voxel_size[2]
+
+    info = {
+        'voxel_size': voxel_size,
+        'lower': lower,
+        'upper': lower + (pixels * voxel_size),
+    }
+
+    # Rescale to range 0 ... 1
+    img = img / img.max(axis=(0, 1, 2), keepdims=True)
+    if 'int' in dtype:
+        img *= 255
+    img = img.astype(dtype)
+
+    cache_filename.parent.mkdir(exist_ok=True, parents=True)
+    with cache_filename.open("wb") as fh:
+        pickle.dump((info, img), fh, pickle.HIGHEST_PROTOCOL)
+
+    return info, img
+
+
+def load_czi(filename, max_xy=512, dtype='uint8', reload=False):
+    raise NotImplementedError
+    # Note, this needs to be updated since I made some modifications to support
+    # Leica LIF format and that includes changing imshow origin from lower to
+    # upper since I was using the Leica viewer to make sure I got the extents
+    # aligned properly.
+
     filename = Path(filename)
     cache_filename = (
         filename.parent
@@ -115,6 +190,7 @@ def load_data(filename, max_xy=512, dtype='uint8', reload=False):
         with cache_filename.open("rb") as fh:
             return pickle.load(fh)
 
+    from aicspylibczi import CziFile
     fh = CziFile(filename)
 
     x_pixels = float(

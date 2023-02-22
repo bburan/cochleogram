@@ -5,7 +5,7 @@ from pathlib import Path
 from enaml.qt.QtCore import QStandardPaths
 
 from cochleogram.model import Piece
-from cochleogram.util import list_pieces, load_data
+from cochleogram.util import list_lif_stacks, list_pieces, load_lif, load_czi
 
 
 def config_file():
@@ -27,10 +27,9 @@ def write_config(config):
         config.write(fh)
 
 
-def main_prepare():
-    parser = argparse.ArgumentParser('Create cached files for cochleogram')
+def main_prepare_czi():
+    parser = argparse.ArgumentParser('Create cached files for cochleogram from CZI files')
     parser.add_argument('path')
-
     args = parser.parse_args()
     src = Path(args.path)
     cochleogram_path = src / 'cochleograms'
@@ -43,6 +42,24 @@ def main_prepare():
     src_cache = src / 'cochleograms' / 'processed' / 'max_xy_512_dtype_uint8'
     dest = src / 'cochleogram_analysis'
     src_cache.rename(dest)
+
+
+def main_prepare_lif():
+    parser = argparse.ArgumentParser('Create cached files for cochleogram from LIF files')
+    parser.add_argument('path')
+    parser.add_argument('--reprocess', action='store_true')
+    args = parser.parse_args()
+    filename = Path(args.path)
+    print(f'Checking {filename}')
+    # We don't need to do anything. Just create the cache which occurs when
+    # we load data for the first time.
+    for piece in list_lif_stacks(filename):
+        print(f'... processing {piece}')
+        _ = load_lif(filename, piece, reprocess=args.reprocess)
+
+    #src_cache = src / 'processed' / 'max_xy_512_dtype_uint8'
+    #dest = src / 'cochleogram_analysis'
+    #src_cache.rename(dest)
 
 
 def main():

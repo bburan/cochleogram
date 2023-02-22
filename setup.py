@@ -4,7 +4,7 @@ from setuptools import find_packages, setup
 requirements = [
     'aicspylibczi',
     'atom',
-    'enaml',
+    'enaml[qt5-pyqt]',
     'matplotlib',
     'numpy',
     'raster_geometry',
@@ -15,7 +15,7 @@ requirements = [
 
 setup(
     name='cochleogram',
-    version='0.0.1',
+    version='0.0.2',
     author='Brad Buran',
     author_email='bburan@alum.mit.edu',
     install_requires=requirements,
@@ -26,7 +26,8 @@ setup(
     entry_points={
         'console_scripts': [
             'cochleogram=cochleogram.main:main',
-            'cochleogram-prepare=cochleogram.main:main_prepare',
+            'cochleogram-prepare-czi=cochleogram.main:main_prepare_czi',
+            'cochleogram-prepare-lif=cochleogram.main:main_prepare_lif',
         ],
     },
 )
