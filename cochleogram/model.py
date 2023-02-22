@@ -8,6 +8,7 @@ from scipy import interpolate
 from scipy import ndimage
 from scipy import signal
 from raster_geometry import sphere
+from skimage.registration import phase_cross_correlation
 
 from cochleogram import util
 
@@ -182,8 +183,6 @@ class Points(Atom):
         x = np.array(state["x"])
         y = np.array(state["y"])
         m = np.isnan(x) | np.isnan(y)
-        print(m)
-        print(x.shape)
         self.x = x[~m].tolist()
         self.y = y[~m].tolist()
         self.i = state["i"]
@@ -197,18 +196,16 @@ class Tile(Atom):
     image = Typed(np.ndarray)
     source = Typed(Path)
     extent = List()
-    scaling = Float()
+    voxel_size = Float()
 
     def __init__(self, info, image, source):
         self.info = info
         self.image = image
         self.source = source
-        ylb = self.info["lower"][1]
-        yub = self.info["upper"][1]
-        xlb = self.info["lower"][0]
-        xub = self.info["upper"][0]
+        xlb, ylb = self.info["lower"][:2]
+        xub, yub = self.info["upper"][:2]
         self.extent = [xlb, xub, ylb, yub]
-        self.scaling = self.info["scaling"][0]
+        self.voxel_size = self.info["voxel_size"][0]
 
     def contains(self, x, y):
         contains_x = self.extent[0] <= x <= self.extent[1]
@@ -223,41 +220,41 @@ class Tile(Atom):
 
     def to_coords(self, x, y, z=None):
         lower = self.info["lower"]
-        scaling = self.info["scaling"]
+        voxel_size = self.info["voxel_size"]
         if z is None:
             indices = np.c_[x, y, np.full_like(x, lower[-1])]
         else:
             indices = np.c_[x, y, z]
-        points = (indices * scaling) + lower
+        points = (indices * voxel_size) + lower
         if z is None:
             return points[:, :2].T
         return points.T
 
     def to_indices(self, x, y, z=None):
         lower = self.info["lower"]
-        scaling = self.info["scaling"]
+        voxel_size = self.info["voxel_size"]
         if z is None:
             points = np.c_[x, y, np.full_like(x, lower[-1])]
         else:
             points = np.c_[x, y, z]
-        indices = (points - lower) / scaling
+        indices = (points - lower) / voxel_size
         if z is None:
             return indices[:, :2].T
         return indices.T
 
     def to_indices_delta(self, v, axis='x'):
         if axis == 'x':
-            return v / self.info['scaling'][0]
+            return v / self.info['voxel_size'][0]
         elif axis == 'y':
-            return v / self.info['scaling'][1]
+            return v / self.info['voxel_size'][1]
         elif axis == 'z':
-            return v / self.info['scaling'][2]
+            return v / self.info['voxel_size'][2]
         else:
             raise ValueError('Unsupported axis')
 
     def nuclei_template(self, radius=2.5e-6):
-        scaling = self.info["scaling"][0]
-        pixel_radius = int(np.round(radius / scaling))
+        voxel_size = self.info["voxel_size"][0]
+        pixel_radius = int(np.round(radius / voxel_size))
         template = sphere(pixel_radius * 3, pixel_radius)
         return template / template.sum()
 
@@ -300,8 +297,19 @@ class Tile(Atom):
             i = i.max(axis=0)
         return i
 
+    def center(self, dx, dy):
+        '''
+        Center tile origin with respect to dx and dy
+
+        This is used for attempting to register images using phase cross-correlation
+        '''
+        extent = np.array(self.extent)
+        width, height = extent[1::2] - extent[::2]
+        self.extent = [dx, dx + width, dy, dy + height]
+
 
 class Piece:
+
     def __init__(self, tiles, path, piece):
         self.tiles = tiles
         self.path = path
@@ -322,7 +330,7 @@ class Piece:
         slice_n = [t.image.shape[2] for t in tiles]
         slice_lb = [t.info['lower'][2] for t in tiles]
         slice_ub = [t.info['upper'][2] for t in tiles]
-        slice_scale = [t.info['scaling'][2] for t in tiles]
+        slice_scale = [t.info['voxel_size'][2] for t in tiles]
 
         z_scale = slice_scale[0]
         z_min = min(slice_lb)
@@ -351,27 +359,36 @@ class Piece:
     def merge_tiles(self):
         merged_lb = np.vstack([tile.info["lower"] for tile in self.tiles]).min(axis=0)
         merged_ub = np.vstack([tile.info["upper"] for tile in self.tiles]).max(axis=0)
-        scaling = self.tiles[0].info["scaling"]
+        merged_lb[:2] = np.vstack([t.extent[::2] for t in self.tiles]).min(axis=0)
+        merged_ub[:2] = np.vstack([t.extent[1::2] for t in self.tiles]).max(axis=0)
+        voxel_size = self.tiles[0].info["voxel_size"]
 
-        lb_pixels = np.floor(merged_lb / scaling).astype("i")
-        ub_pixels = np.ceil(merged_ub / scaling).astype("i")
+        lb_pixels = np.floor(merged_lb / voxel_size).astype("i")
+        ub_pixels = np.ceil(merged_ub / voxel_size).astype("i")
         extent_pixels = ub_pixels - lb_pixels
         shape = extent_pixels.tolist() + [3]
-        merged_image = np.full(shape, fill_value=0, dtype=np.float)
+        merged_image = np.full(shape, fill_value=0, dtype=int)
+
+        print(merged_lb)
+        print(merged_ub)
+        print(shape)
 
         for tile in self.tiles:
-            tile_lb = np.round((tile.info["lower"] - merged_lb) / scaling).astype("i")
+            tile_lb = tile.info['lower']
+            tile_lb[:2] = tile.extent[::2]
+            tile_lb = np.round((tile_lb - merged_lb) / voxel_size).astype("i")
             tile_ub = tile_lb + tile.image.shape[:-1]
             s = tuple(np.s_[lb:ub] for lb, ub in zip(tile_lb, tile_ub))
-            merged_image[s] = tile.image[::-1, ::-1, ::-1].swapaxes(0, 1)
+            #merged_image[s] = tile.image[::-1, ::-1, ::-1].swapaxes(0, 1)
+            merged_image[s] = tile.image[:]
 
         info = {
             "lower": merged_lb,
             "upper": merged_ub,
             "extent": merged_ub - merged_lb,
-            "scaling": scaling,
+            "voxel_size": voxel_size,
         }
-        merged_image = merged_image.swapaxes(0, 1)
+        #merged_image = merged_image.swapaxes(0, 1)
         return Tile(info, merged_image, self.path)
 
     def get_state(self):
@@ -413,6 +430,18 @@ class Piece:
     def clear_spiral(self, cell_type):
         self.spirals[cell_type].set_nodes([], [])
 
+    #def estimate_registration(self):
+    #    n = len(self.tiles)
+    #    shifts = np.zeros(shape=(n, n, 2))
+    #    images = [t.get_image() for t in self.tiles]
+    #    for r, i1 in enumerate(images):
+    #        for c, i2 in enumerate(images):
+    #            shifts[r, c, :] = phase_cross_correlation(i1, i2)
+    #    return shifts
+
+    #def align(self):
+    #    i1, i2 = zip(images[::
+    #    shifts = [phase_cross_correlation(i
 
 class Cochlea:
     def __init__(self, pieces, path):
