@@ -213,13 +213,13 @@ class ImagePlot(Atom):
         self.axes = axes
         self.axes.xaxis.set_major_locator(ticker.NullLocator())
         self.axes.yaxis.set_major_locator(ticker.NullLocator())
-        self.artist = axes.imshow(np.zeros((0, 0)), origin="lower")
+        self.artist = axes.imshow(np.zeros((0, 0)), origin="upper")
         self.rectangle = mp.patches.Rectangle((0, 0), 0, 0, ec='red', fc='None', zorder=5000)
         self.rectangle.set_alpha(0)
         self.axes.add_patch(self.rectangle)
         self.z_slice_max = self.tile.image.shape[2] - 1
         self.z_slice = self.tile.image.shape[2] // 2
-        self.shift = self.tile.info["scaling"][0] * 5
+        self.shift = self.tile.info["voxel_size"][0] * 5
         tile.observe('extent', self.request_redraw)
 
     def _observe_highlight(self, event):
@@ -233,6 +233,12 @@ class ImagePlot(Atom):
 
     def _observe_zorder(self, event):
         self.artist.set_zorder(self.zorder)
+
+    def drag_image(self, dx, dy):
+        extent = np.array(self.tile.extent)
+        extent[:2] += dx
+        extent[-2:] += dy
+        self.tile.extent = extent.tolist()
 
     def move_image(self, direction, step_scale=1):
         extent = np.array(self.tile.extent)
@@ -268,7 +274,7 @@ class ImagePlot(Atom):
             image = np.max(image, axis=2)
         elif self.display_mode == "slice":
             image = image[:, :, self.z_slice]
-        self.artist.set_data(image[::-1, ::-1])
+        self.artist.set_data(image)
         self.artist.set_extent(self.tile.extent)
         xlb, xub, ylb, yub = self.tile.extent
         self.rectangle.set_bounds(xlb, ylb, xub-xlb, yub-ylb)
@@ -460,7 +466,7 @@ class Presenter(Atom):
         elif key == '3':
             deferred_call(self.set_interaction_mode, 'OHC3', None)
         elif (key == 'escape') and (self.drag_event is not None) and (self.interaction_submode == 'exclude'):
-            self.end_drag(event, keep=False)
+            self.end_drag_tile(event, keep=False)
         elif self.interaction_mode == 'tiles' and self.current_artist is not None:
             self.key_press_tiles(event)
         else:
@@ -515,6 +521,7 @@ class Presenter(Atom):
                     break
             else:
                 self.current_artist_index = None
+        self.drag_event = event
 
     def button_press_point_plot(self, event):
         if event.button != MouseButton.LEFT:
@@ -533,13 +540,16 @@ class Presenter(Atom):
                 self.point_artists[self.interaction_mode, 'spiral'].add_point(event.xdata, event.ydata)
             elif self.interaction_submode == 'exclude':
                 if self.drag_event is None:
-                    self.start_drag(event)
+                    self.start_drag_exclude(event)
                 else:
-                    self.end_drag(event, keep=True)
+                    self.end_drag_exclude(event, keep=True)
 
     def button_release(self, event):
         if event.button == MouseButton.RIGHT:
             self.end_pan(event)
+        elif event.button == MouseButton.LEFT:
+            if self.interaction_mode == 'tiles':
+                self.drag_event = None
 
     def motion(self, event):
         if self.pan_event is not None:
@@ -568,18 +578,29 @@ class Presenter(Atom):
     def end_pan(self, event):
         self.pan_event = None
 
-    def start_drag(self, event):
+    def start_drag_exclude(self, event):
         self.drag_event = event
         self.current_spiral_artist.start_exclude(event.xdata, event.ydata)
+
+    def start_drag_tile(self, event):
+        self.drag_event = event
 
     def motion_drag(self, event):
         if event.xdata is None:
             self.end_drag(event, keep=False)
+        elif self.interaction_mode == 'tiles' and self.current_artist is not None:
+            dx = event.xdata - self.drag_event.xdata
+            dy = event.ydata - self.drag_event.ydata
+            self.current_artist.drag_image(dx, dy)
+            self.drag_event = event
         else:
             self.current_spiral_artist.update_exclude(event.xdata, event.ydata)
 
-    def end_drag(self, event, keep):
+    def end_drag_exclude(self, event, keep):
         self.current_spiral_artist.end_exclude(keep=keep)
+        self.drag_event = None
+
+    def end_drag_tile(self, event):
         self.drag_event = None
 
     def scroll(self, event):
