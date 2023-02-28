@@ -233,7 +233,7 @@ class ImagePlot(Atom):
         self.axes = axes
         self.axes.xaxis.set_major_locator(ticker.NullLocator())
         self.axes.yaxis.set_major_locator(ticker.NullLocator())
-        self.artist = axes.imshow(np.zeros((0, 0)), origin="lower")
+        self.artist = axes.imshow(np.array([[0, 1], [0, 1]]), origin="lower")
         self.rectangle = mp.patches.Rectangle((0, 0), 0, 0, ec='red', fc='None', zorder=5000)
         self.rectangle.set_alpha(0)
         self.axes.add_patch(self.rectangle)
@@ -542,7 +542,7 @@ class Presenter(Atom):
     def button_press_point_plot(self, event):
         if event.button != MouseButton.LEFT:
             return
-        if event.key == 'alt' and event.xdata is not None:
+        if event.key == 'control' and event.xdata is not None:
             if self.interaction_submode == 'spiral':
                 self.point_artists[self.interaction_mode, 'spiral'].set_origin(event.xdata, event.ydata)
         elif event.key == "shift" and event.xdata is not None:
@@ -705,14 +705,14 @@ class Presenter(Atom):
         })
 
     def save_state(self):
-        state_filename = self.piece.path / f"piece_{self.piece.piece}.json"
+        state_filename = self.piece.path / f"{self.piece.name}.json"
         state = self.get_full_state()
         state_filename.write_text(json.dumps(state, indent=4))
         self.saved_state = state
         self.update()
 
     def load_state(self):
-        state_filename = self.piece.path / f"piece_{self.piece.piece}.json"
+        state_filename = self.piece.path / f"{self.piece.name}.json"
         if not state_filename.exists():
             raise IOError('No saved analysis found')
         state = json.loads(state_filename.read_text())

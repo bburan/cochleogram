@@ -50,12 +50,7 @@ def main_prepare_lif():
     parser.add_argument('--reprocess', action='store_true')
     args = parser.parse_args()
     filename = Path(args.path)
-    print(f'Checking {filename}')
-    # We don't need to do anything. Just create the cache which occurs when
-    # we load data for the first time.
-    for piece in list_lif_stacks(filename):
-        print(f'... processing {piece}')
-        _ = load_lif(filename, piece, reprocess=args.reprocess)
+    util.process_lif(filename, args.reprocess)
 
 
 def main():
@@ -69,15 +64,13 @@ def main():
 
     parser = argparse.ArgumentParser("Cochleogram helper")
     parser.add_argument("path", nargs='?')
-    parser.add_argument("--piece")
     args = parser.parse_args()
 
     app = QtApplication()
     config = get_config()
 
     if args.path is not None:
-        pieces = list_pieces(args.path) if args.piece is None else [args.piece]
-        presenters = [Presenter(Piece.from_path(args.path, p)) for p in pieces]
+        presenters = [Presenter(Piece.from_path(args.path, p)) for p in list_pieces(args.path)]
     else:
         presenters = []
 

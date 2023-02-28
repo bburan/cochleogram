@@ -18,6 +18,7 @@ dependencies = [
     "raster_geometry",
     "pandas",
     "scipy",
+    "psiaudio",
 ]
 dynamic = ["version"]
 

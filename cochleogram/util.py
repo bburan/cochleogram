@@ -6,7 +6,7 @@ import pickle
 from matplotlib import path as mpath
 import numpy as np
 import pandas as pd
-from scipy import ndimage, signal
+from scipy import ndimage, optimize, signal
 
 
 
@@ -112,9 +112,10 @@ def load_lif(filename, piece, max_xy=512, dtype='uint8', reprocess=False):
     filename = Path(filename)
     cache_filename = (
         filename.parent
-        / "cochleogram_analysis"
+        / filename.stem
         / (filename.stem + f'_{piece}.pkl')
     )
+    print(cache_filename)
     if not reprocess and cache_filename.exists():
         with cache_filename.open("rb") as fh:
             return pickle.load(fh)
@@ -192,6 +193,11 @@ def load_lif(filename, piece, max_xy=512, dtype='uint8', reprocess=False):
         pickle.dump((info, img), fh, pickle.HIGHEST_PROTOCOL)
 
     return info, img
+
+
+def process_lif(filename, reprocess):
+    for piece in list_lif_stacks(filename):
+        _ = load_lif(filename, piece, reprocess=reprocess)
 
 
 def load_czi(filename, max_xy=512, dtype='uint8', reload=False):
@@ -346,3 +352,40 @@ def smooth_epochs(epochs):
             i += 1
         smoothed.append((lb, ub))
     return np.array(smoothed)
+
+
+def arc_origin(x, y):
+    '''
+    Determine most likely origin for arc
+    '''
+    def _fn(origin, xa, ya):
+        xo, yo = origin
+        d = np.sqrt((xa - xo) ** 2 + (ya - yo) ** 2)
+        return np.sum(np.abs(d - d.mean()))
+    result = optimize.minimize(_fn, (x.mean(), y.mean()), (x, y))
+    return result.x
+
+
+def arc_direction(x, y):
+    '''
+    Given arc defined by x and y, determine direction of arc
+
+    Parameters
+    ----------
+    x : array
+        x coordinates of vertices defining arc
+    y : array
+        y coordinates of vertices defining arc
+
+    Returns
+    -------
+    direction : int
+        -1 if arc sweeps clockwise (i.e., change in angle of vertices relative
+        to origin is negative), +1 if arc sweeps counter-clockwise
+    '''
+    xo, yo = arc_origin(x, y)
+    angles = np.unwrap(np.arctan2(y-yo, x-xo))
+    sign = np.sign(np.diff(angles))
+    if np.any(sign != sign[0]):
+        raise ValueError('Cannot determine direction of arc')
+    return sign[0]

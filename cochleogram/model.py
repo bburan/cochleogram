@@ -4,6 +4,8 @@ import re
 
 from atom.api import Atom, Dict, Event, Float, Int, List, Typed
 import numpy as np
+import pandas as pd
+from psiaudio.util import octave_space
 from scipy import interpolate
 from scipy import ndimage
 from scipy import signal
@@ -81,6 +83,15 @@ class Points(Atom):
         tck, u = interpolate.splprep(nodes, k=degree, s=smoothing)
         x = np.arange(0, 1 + resolution, resolution)
         xi, yi = interpolate.splev(x, tck, der=0)
+        return xi, yi
+
+    def length(self, degree=3, smoothing=0, resolution=0.001):
+        nodes = self.get_nodes()
+        if len(nodes[0]) <= 3:
+            return np.nan
+        tck, u = interpolate.splprep(nodes, k=degree, s=smoothing)
+        x = np.arange(0, 1 + resolution, resolution)
+        xi, yi = interpolate.splev(x, tck, der=1)
         return xi, yi
 
     def set_nodes(self, *args):
@@ -345,6 +356,7 @@ class Piece:
     def __init__(self, tiles, path, piece):
         self.tiles = tiles
         self.path = path
+        self.name = f'{path.stem}_piece_{piece}'
         self.piece = piece
         keys = 'IHC', 'OHC1', 'OHC2', 'OHC3'
         self.spirals = {k: Points() for k in keys}
@@ -451,12 +463,57 @@ class Piece:
         self.spirals[cell_type].set_nodes([], [])
 
 
+freq_fn = {
+    'mouse': lambda d: (10**((1-d)*0.92) - 0.680) * 9.8,
+}
+
+
 class Cochlea:
+
     def __init__(self, pieces, path):
         self.pieces = pieces
         self.path = path
+        self.name = path.stem
 
     @classmethod
     def from_path(cls, path):
+        path = Path(path)
         pieces = [Piece.from_path(path, p) for p in util.list_pieces(path)]
         return cls(pieces, path)
+
+    def make_frequency_map(self, freq_start=4, freq_end=64, freq_step=0.5,
+                           species='mouse', spiral='IHC'):
+        # First, we need to merge the spirals
+        xo, yo = 0, 0
+        results = []
+        for piece in self.pieces:
+            s = piece.spirals[spiral]
+            x, y = s.interpolate(resolution=0.001)
+            x_norm = x - (x[0] - xo)
+            y_norm = y - (y[0] - yo)
+            xo = x_norm[-1]
+            yo = y_norm[-1]
+            i = np.arange(len(x)) / len(x)
+            result = pd.DataFrame({
+                'direction': s.direction(),
+                'i': i,
+                'x': x_norm,
+                'y': y_norm,
+                'x_orig': x,
+                'y_orig': y,
+                'piece': piece.piece,
+            }).set_index(['piece', 'i'])
+            results.append(result)
+        results = pd.concat(results).reset_index()
+
+        # Now we can do some distance calculations
+        results['distance_mm'] = np.sqrt(results['x'].diff() ** 2 + results['y'].diff() ** 2).cumsum() * 1e-3
+        results['distance_mm'] = results['distance_mm'].fillna(0)
+        results['distance_norm'] = results['distance_mm'] / results['distance_mm'].max()
+        results['frequency'] = freq_fn[species](results['distance_norm'])
+
+        info = {}
+        for freq in octave_space(freq_start, freq_end, freq_step):
+            idx = (results['frequency'] - freq).abs().idxmin()
+            info[freq] = results.loc[idx].to_dict()
+        return info

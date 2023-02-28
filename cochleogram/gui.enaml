@@ -10,6 +10,7 @@ from enaml.widgets.api import (Action, ButtonGroup, CheckBox, Container,
                                MPLCanvas, ObjectCombo, PushButton, Slider)
 
 from cochleogram.presenter import Presenter
+from cochleogram import plot, util
 
 
 def bind(figure, presenter):
@@ -51,7 +52,6 @@ def load_state(parent, presenters):
         except Exception as e:
             information(parent, 'Error', str(e))
     information(parent, 'Analysis loaded', 'Analysis has been loaded.')
-
 
 
 CELLS = ['IHC', 'OHC1', 'OHC2', 'OHC3']
@@ -311,6 +311,7 @@ enamldef CochleagramWindow(MainWindow): window:
     initial_size = (900, 900)
     title = 'Cochelogram'
 
+    attr cochlea
     attr presenters = []
     attr current_path = ''
 
@@ -318,13 +319,13 @@ enamldef CochleagramWindow(MainWindow): window:
         Menu:
             title = '&File'
             Action:
-                text = 'Open\tCtrl+O'
+                text = 'Open processed dataset\tCtrl+O'
                 triggered ::
                     path = FileDialogEx.get_existing_directory(window, current_path=window.current_path)
                     if path:
                         window.current_path = path
                         from cochleogram.model import Cochlea
-                        cochlea = Cochlea.from_path(path)
+                        window.cochlea = Cochlea.from_path(path)
                         window.presenters = [Presenter(p) for p in cochlea.pieces]
                         for p in window.presenters:
                             try:
@@ -332,6 +333,14 @@ enamldef CochleagramWindow(MainWindow): window:
                             except IOError:
                                 pass
                             deferred_call(add_dock_item, workspace, p)
+
+            Action:
+                text = 'Process LIF file\tCtrl+P'
+                triggered ::
+                    path = FileDialogEx.get_open_file_name(window, current_path=window.current_path)
+                    if path:
+                        util.process_lif(path, reprocess=True)
+                        information(window, 'Processing', 'Lif file has been processed. You may open the processed data now.')
 
             Action:
                 text = 'Save analysis\tCtrl+S'
@@ -342,6 +351,17 @@ enamldef CochleagramWindow(MainWindow): window:
                 text = 'Load analysis\tCtrl+L'
                 triggered ::
                     load_state(window, window.presenters)
+
+            Action:
+                separator = True
+
+            Action:
+                text = 'Generate frequency map\tCtrl+F'
+                triggered ::
+                    fig = plot.frequency_map(cochlea)
+                    fig.suptitle(cochlea.name)
+                    fig.savefig(cochlea.path / f'{cochlea.name}_frequency_map.pdf')
+                    information(window, 'Frequency map', 'Frequency map has been generated.')
 
     initialized ::
         for presenter in presenters:
@@ -368,6 +388,15 @@ enamldef CochleagramWindow(MainWindow): window:
                     Html:
                         source = '''
                         <h3>Datasets</h3>
+                        <p>Pieces must be numbered sequentially from base
+                        (hook) to apex. If more than one image is required for
+                        a piece, use letters for the suffixes (i.e., "piece
+                        2a", "piece 2b", etc.). The order in which the images
+                        for a single piece are labled does not matter since the
+                        program will automatically align them and merge the
+                        images for analysis.
+                        </p>
+
                         <p>When loading data (File -> Open), select the
                         cochleogram_analysis folder. All pieces found in that
                         folder will be loaded. Any prior analyses will also be
