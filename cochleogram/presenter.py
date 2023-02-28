@@ -40,8 +40,20 @@ from cochleogram.util import get_region, make_plot_path, shortest_path
 
 class PointPlot(Atom):
 
+    #: Artist that plots the nodes the user specified
     artist = Value()
+
+    #: Artist that plots the starting point (i.e., the first node). This is a
+    #: visual clue that lets the user know that the arc is proceeding in the
+    #: right direction.
+    origin_artist = Value()
+
+    #: Artist that draws the spline connecting the nodes the user selected. The
+    #: spline is automatically updated as the user adds/removes nodes. The
+    #: spline is used for many calculations so it is important to ensure it
+    #: passes through the desired points.
     spline_artist = Value()
+
     axes = Value()
     points = Typed(Points)
     name = Str()
@@ -54,7 +66,8 @@ class PointPlot(Atom):
     def __init__(self, axes, points, **kwargs):
         super().__init__(**kwargs)
         self.axes = axes
-        (self.artist,) = axes.plot([], [], "ko", mec="w", mew=1, zorder=100)
+        self.artist, = axes.plot([], [], "ko", mec="w", mew=1, zorder=100)
+        self.origin_artist, = axes.plot([], [], "o", color='FireBrick', mec="w", mew=1, zorder=90, ms=10)
         self.points = points
         points.observe('updated', self.request_redraw)
 
@@ -66,6 +79,9 @@ class PointPlot(Atom):
 
     def add_point(self, x, y):
         self.points.add_node(x, y)
+
+    def set_origin(self, x, y):
+        self.points.set_origin(x, y)
 
     def remove_point(self, x, y):
         self.points.remove_node(x, y)
@@ -83,6 +99,10 @@ class PointPlot(Atom):
     def redraw(self, event=None):
         nodes = self.points.get_nodes()
         self.has_nodes = len(nodes[0]) > 0
+        if self.has_nodes:
+            self.origin_artist.set_data(nodes[0][0], nodes[1][0])
+        else:
+            self.origin_artist.set_data([], [])
         self.artist.set_data(*nodes)
         self.artist.set_visible(self.visible)
         self.updated = True
@@ -522,7 +542,10 @@ class Presenter(Atom):
     def button_press_point_plot(self, event):
         if event.button != MouseButton.LEFT:
             return
-        if event.key == "shift" and event.xdata is not None:
+        if event.key == 'alt' and event.xdata is not None:
+            if self.interaction_submode == 'spiral':
+                self.point_artists[self.interaction_mode, 'spiral'].set_origin(event.xdata, event.ydata)
+        elif event.key == "shift" and event.xdata is not None:
             if self.interaction_submode == 'cells':
                 self.point_artists[self.interaction_mode, 'cells'].remove_point(event.xdata, event.ydata)
             elif self.interaction_submode == 'spiral':

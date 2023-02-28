@@ -16,15 +16,15 @@ class Points(Atom):
 
     x = List()
     y = List()
-    i = Int()
+    origin = Int()
     exclude = List()
 
     updated = Event()
 
-    def __init__(self, x=None, y=None, i=0, exclude=None):
+    def __init__(self, x=None, y=None, origin=0, exclude=None):
         self.x = [] if x is None else x
         self.y = [] if y is None else y
-        self.i = i
+        self.origin = origin
         self.exclude = [] if exclude is None else exclude
 
     def expand_nodes(self, distance):
@@ -57,7 +57,7 @@ class Points(Atom):
         we want to draw a path through. This avoids trying to solve the
         complete traveling salesman problem which is NP-hard.
         """
-        i = self.i
+        i = self.origin
         nodes = list(zip(self.x, self.y))
         path = []
         while len(nodes) > 1:
@@ -70,6 +70,10 @@ class Points(Atom):
             return list(zip(*path))
         return [(), ()]
 
+    def direction(self):
+        x, y = self.interpolate()
+        return util.arc_direction(x, y)
+
     def interpolate(self, degree=3, smoothing=0, resolution=0.001):
         nodes = self.get_nodes()
         if len(nodes[0]) <= 3:
@@ -79,10 +83,22 @@ class Points(Atom):
         xi, yi = interpolate.splev(x, tck, der=0)
         return xi, yi
 
-    def set_nodes(self, x, y):
-        m = np.isnan(x) | np.isnan(y)
-        self.x = list(x[~m])
-        self.y = list(y[~m])
+    def set_nodes(self, *args):
+        if len(args) == 1:
+            x, y = zip(*args)
+        elif len(args) == 2:
+            x, y = args
+        else:
+            raise ValueError('Unrecognized node format')
+        x = np.asarray(x)
+        y = np.asarray(y)
+        if len(x) == 0:
+            self.x = list(x)
+            self.y = list(y)
+        else:
+            m = np.isnan(x) | np.isnan(y)
+            self.x = list(x[~m])
+            self.y = list(y[~m])
         self.updated = True
 
     def add_node(self, x, y, hit_threshold=25):
@@ -114,6 +130,11 @@ class Points(Atom):
         i = self.find_node(x, y, hit_threshold)
         self.x.pop(i)
         self.y.pop(i)
+        self.update_exclude()
+        self.updated = True
+
+    def set_origin(self, x, y, hit_threshold=25):
+        self.origin = int(self.find_node(x, y, hit_threshold))
         self.update_exclude()
         self.updated = True
 
@@ -174,7 +195,7 @@ class Points(Atom):
         return {
             "x": self.x,
             "y": self.y,
-            "i": self.i,
+            "origin": self.origin,
             "exclude": self.exclude,
         }
 
@@ -184,8 +205,8 @@ class Points(Atom):
         m = np.isnan(x) | np.isnan(y)
         self.x = x[~m].tolist()
         self.y = y[~m].tolist()
-        self.i = state["i"]
         self.exclude = state.get("exclude", [])
+        self.origin = state.get("origin", 0)
         self.updated = True
 
 

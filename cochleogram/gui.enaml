@@ -426,14 +426,19 @@ enamldef CochleagramWindow(MainWindow): window:
                         points and the spiral will be rerouted through those
                         points. The algorithm assumes that the "next" point in
                         the path is the one closest to it (i.e., the order in
-                        which you add the points does not matter). However, be
-                        sure that the very first point you add is the beginning
-                        or end of the spiral.</p>
+                        which you add the points does not matter).</p>
+                        <p>However, the very first point you add should be the
+                        beginning of the spiral on the side that faces the
+                        most basal region of the cochlea. If you realize you
+                        made a mistake in your starting point, you can use alt
+                        + left click to select a different point as the start
+                        of the spiral.</p>
                         <p>Be sure that the spiral bisects the nuclei (IHCs) or
                         cuticular plate (OHCs).</p>
                         <dl>
                             <dt>left click</dt> <dd>Add point</dd>
                             <dt>shift + left click</dt> <dd>Remove point</dd>
+                            <dt>alt + left click</dt> <dd>Set point as origin for spiral</dd>
                         </dl>
 
                         <h3>Cell mode</h3>
