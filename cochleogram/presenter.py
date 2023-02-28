@@ -213,7 +213,7 @@ class ImagePlot(Atom):
         self.axes = axes
         self.axes.xaxis.set_major_locator(ticker.NullLocator())
         self.axes.yaxis.set_major_locator(ticker.NullLocator())
-        self.artist = axes.imshow(np.zeros((0, 0)), origin="upper")
+        self.artist = axes.imshow(np.zeros((0, 0)), origin="lower")
         self.rectangle = mp.patches.Rectangle((0, 0), 0, 0, ec='red', fc='None', zorder=5000)
         self.rectangle.set_alpha(0)
         self.axes.add_patch(self.rectangle)
@@ -236,21 +236,21 @@ class ImagePlot(Atom):
 
     def drag_image(self, dx, dy):
         extent = np.array(self.tile.extent)
-        extent[:2] += dx
-        extent[-2:] += dy
+        extent[0:2] += dx
+        extent[2:4] += dy
         self.tile.extent = extent.tolist()
 
     def move_image(self, direction, step_scale=1):
         extent = np.array(self.tile.extent)
         step = step_scale * self.shift
         if direction == "up":
-            extent[2:] += step
+            extent[2:4] += step
         elif direction == "down":
-            extent[2:] -= step
+            extent[2:4] -= step
         elif direction == "left":
-            extent[:2] -= step
+            extent[0:2] -= step
         elif direction == "right":
-            extent[:2] += step
+            extent[0:2] += step
         self.tile.extent = extent.tolist()
 
     @observe("z_slice", "display_mode", "display_channel", "alpha", "highlight")
@@ -264,19 +264,16 @@ class ImagePlot(Atom):
             self.needs_redraw = False
 
     def redraw(self, event=None):
-        if self.display_channel == "All":
-            image = self.tile.image
-        elif self.display_channel == "CtBP2":
-            image = self.tile.image[:, :, :, 0]
-        elif self.display_channel == "MyosinVIIa":
-            image = self.tile.image[:, :, :, 1]
-        if self.display_mode == "projection":
-            image = np.max(image, axis=2)
-        elif self.display_mode == "slice":
-            image = image[:, :, self.z_slice]
+        channel_map = {'All': None, 'CtBP2': 0, 'MyosinVIIa': 1}
+        channel = channel_map[self.display_channel]
+        z_slice = None if self.display_mode == 'projection' else self.z_slice
+        projection = self.display_mode == 'projection'
+        image = self.tile.get_image(channel=channel, z_slice=z_slice,
+                                    projection=projection).swapaxes(0, 1)
         self.artist.set_data(image)
-        self.artist.set_extent(self.tile.extent)
-        xlb, xub, ylb, yub = self.tile.extent
+
+        xlb, xub, ylb, yub = extent = self.tile.get_image_extent()[:4]
+        self.artist.set_extent(extent)
         self.rectangle.set_bounds(xlb, ylb, xub-xlb, yub-ylb)
         self.updated = True
 
@@ -466,7 +463,7 @@ class Presenter(Atom):
         elif key == '3':
             deferred_call(self.set_interaction_mode, 'OHC3', None)
         elif (key == 'escape') and (self.drag_event is not None) and (self.interaction_submode == 'exclude'):
-            self.end_drag_tile(event, keep=False)
+            self.end_drag_exclude(event, keep=False)
         elif self.interaction_mode == 'tiles' and self.current_artist is not None:
             self.key_press_tiles(event)
         else:
@@ -521,7 +518,6 @@ class Presenter(Atom):
                     break
             else:
                 self.current_artist_index = None
-        self.drag_event = event
 
     def button_press_point_plot(self, event):
         if event.button != MouseButton.LEFT:
@@ -587,7 +583,8 @@ class Presenter(Atom):
 
     def motion_drag(self, event):
         if event.xdata is None:
-            self.end_drag(event, keep=False)
+            if self.interaction_submode == 'exclude':
+                self.end_drag_exclude(event, keep=False)
         elif self.interaction_mode == 'tiles' and self.current_artist is not None:
             dx = event.xdata - self.drag_event.xdata
             dy = event.ydata - self.drag_event.ydata

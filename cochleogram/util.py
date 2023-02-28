@@ -1,7 +1,7 @@
+from importlib.metadata import version
 import re
 from pathlib import Path
 import pickle
-
 
 from matplotlib import path as mpath
 import numpy as np
@@ -22,7 +22,7 @@ def get_region(spline, start, end):
     return xs, ys
 
 
-def make_plot_path(spline, regions):
+def make_plot_path(spline, regions, path_width=15):
     if len(regions) == 0:
         verts = np.zeros((0, 2))
         return mpath.Path(verts, [])
@@ -30,7 +30,7 @@ def make_plot_path(spline, regions):
     path_data = []
     for s, e in regions:
         xs, ys = get_region(spline, s, e)
-        xe, ye = expand_path(xs, ys, 15e-6)
+        xe, ye = expand_path(xs, ys, 15)
         xlb, xub = xe[0, :], xe[-1, :]
         ylb, yub = ye[0, :], ye[-1, :]
         xc = np.r_[xlb[1:], xub[::-1]]
@@ -61,7 +61,7 @@ def expand_path(x, y, width):
     return x, y
 
 
-def find_nuclei(x, y, i, spacing=5e-6):
+def find_nuclei(x, y, i, spacing=5):
     xy_delta = np.mean(np.sqrt(np.diff(x) ** 2 + np.diff(y) ** 2))
     distance = np.floor(spacing / xy_delta)
     p, _ = signal.find_peaks(i, distance=distance)
@@ -130,9 +130,15 @@ def load_lif(filename, piece, max_xy=512, dtype='uint8', reprocess=False):
 
     root, _ = get_xml(filename)
     node = root.find(f'.//Element[@Name="{piece}"]')
-    x_pos = float(node.find('.//FilterSettingRecord[@Attribute="XPos"]').attrib['Variant'])
-    y_pos = float(node.find('.//FilterSettingRecord[@Attribute="YPos"]').attrib['Variant'])
+
+    y_pos = float(node.find('.//FilterSettingRecord[@Attribute="XPos"]').attrib['Variant'])
+    x_pos = float(node.find('.//FilterSettingRecord[@Attribute="YPos"]').attrib['Variant'])
+    # This seems to work for the Z-axis.
     z_pos = float(node.find('.//DimensionDescription[@DimID="3"]').attrib['Origin'])
+
+    system_number = node.find('.//FilterSettingRecord[@Attribute="System_Number"]').attrib['Variant']
+    system_type = node.find('.//ScannerSettingRecord[@Identifier="SystemType"]').attrib['Variant']
+    system = f'{system_type} {system_number}'
 
     pixels = np.array(stack.dims[:3])
     voxel_size = 1 / np.array(stack.scale[:3])
@@ -145,25 +151,41 @@ def load_lif(filename, piece, max_xy=512, dtype='uint8', reprocess=False):
     img = np.empty(shape, dtype=np.float32)
     for c in range(stack.channels):
         for z, s in enumerate(stack.get_iter_z(c=c)):
-            #img[:, :, z, c] = ndimage.zoom(s, (zoom, zoom))[:, ::-1].T
             img[:, :, z, c] = ndimage.zoom(s, (zoom, zoom))
 
-    # Z-step was negative. Flip stack to fix this.
+    # Z-step was negative. Flip stack to fix this so that we always have a
+    # positive Z-step.
     if voxel_size[2] < 0:
         img = img[:, :, ::-1]
         voxel_size[2] = -voxel_size[2]
 
+    # Note that all units should be in microns since this is the most logical
+    # unit for a confocal analysis.
     info = {
+        # XYZ voxel size in microns (um).
         'voxel_size': voxel_size,
+        # XYZ origin in microns (um).
         'lower': lower,
-        'upper': lower + (pixels * voxel_size),
+        # Store version number of cochleogram along with 
+        'version': version('cochleogram'),
+        # Reader used to read in data
+        'reader': 'lif',
+        # System used. I am including this information just in case we have to
+        # implement specific tweaks for each confocal system we use.
+        'system': system,
+        'note': 'XY position from stage coords seem to be swapped',
     }
 
     # Rescale to range 0 ... 1
     img = img / img.max(axis=(0, 1, 2), keepdims=True)
     if 'int' in dtype:
         img *= 255
-    img = img.astype(dtype)
+
+    # Coerce to dtype, reorder so that tile origin is in lower corner of image
+    # (makes it easer to reconcile with plotting), and swap axes from YX to XY.
+    # Final axes ordering should be XYZC where C is channel and origin of XY
+    # should be in lower corner of screen.
+    img = img.astype(dtype)[::-1].swapaxes(0, 1)
 
     cache_filename.parent.mkdir(exist_ok=True, parents=True)
     with cache_filename.open("wb") as fh:

@@ -8,7 +8,6 @@ from scipy import interpolate
 from scipy import ndimage
 from scipy import signal
 from raster_geometry import sphere
-from skimage.registration import phase_cross_correlation
 
 from cochleogram import util
 
@@ -86,7 +85,7 @@ class Points(Atom):
         self.y = list(y[~m])
         self.updated = True
 
-    def add_node(self, x, y, hit_threshold=2.5e-6):
+    def add_node(self, x, y, hit_threshold=25):
         if not (np.isfinite(x) and np.isfinite(y)):
             raise ValueError('Point must be finite')
         if not self.has_node(x, y, hit_threshold):
@@ -109,9 +108,9 @@ class Points(Atom):
         i = np.argmin(d)
         if d[i] < hit_threshold:
             return i
-        raise ValueError('No node nearby')
+        raise ValueError(f'No node within hit threshold of {hit_threshold}')
 
-    def remove_node(self, x, y, hit_threshold=25e-6):
+    def remove_node(self, x, y, hit_threshold=25):
         i = self.find_node(x, y, hit_threshold)
         self.x.pop(i)
         self.y.pop(i)
@@ -202,10 +201,16 @@ class Tile(Atom):
         self.info = info
         self.image = image
         self.source = source
-        xlb, ylb = self.info["lower"][:2]
-        xub, yub = self.info["upper"][:2]
-        self.extent = [xlb, xub, ylb, yub]
-        self.voxel_size = self.info["voxel_size"][0]
+        xlb, ylb, zlb = self.info["lower"][:3]
+
+        # Images are in XYZC dimension. We need to calculate the upper extent
+        # of the image so we can properly plot it.
+        xpx, ypx, zpx = self.image.shape[:3]
+        xv, yv, zv = self.info['voxel_size'][:3]
+        xub = xlb + xpx * xv
+        yub = ylb + ypx * yv
+        zub = zlb + zpx * zv
+        self.extent = [xlb, xub, ylb, yub, zlb, zub]
 
     def contains(self, x, y):
         contains_x = self.extent[0] <= x <= self.extent[1]
@@ -258,6 +263,12 @@ class Tile(Atom):
         template = sphere(pixel_radius * 3, pixel_radius)
         return template / template.sum()
 
+    def get_image_extent(self):
+        # This flips the x and y extents. Seems necessary to make things work
+        # for the Leica SP5.
+        #return tuple(self.extent[2:4] + self.extent[0:2])
+        return tuple(self.extent[:4])
+
     def get_image(self, channel=None, z_slice=None, projection=True):
         if channel is None:
             channel = np.s_[:]
@@ -290,7 +301,7 @@ class Tile(Atom):
             x, y = util.expand_path(x, y, width)
 
         xi, yi = self.to_indices(x.ravel(), y.ravel())
-        i = ndimage.map_coordinates(image.T, [xi, yi])
+        i = ndimage.map_coordinates(image, [xi, yi])
 
         i.shape = x.shape
         if width is not None:
@@ -304,8 +315,8 @@ class Tile(Atom):
         This is used for attempting to register images using phase cross-correlation
         '''
         extent = np.array(self.extent)
-        width, height = extent[1::2] - extent[::2]
-        self.extent = [dx, dx + width, dy, dy + height]
+        width, height = extent[1:4:2] - extent[:4:2]
+        self.extent = [dx, dx + width, dy, dy + height] + extent[4:]
 
 
 class Piece:
@@ -328,8 +339,8 @@ class Piece:
         # such that they should align properly in z-space. This simplifies a
         # few downstream operations.
         slice_n = [t.image.shape[2] for t in tiles]
-        slice_lb = [t.info['lower'][2] for t in tiles]
-        slice_ub = [t.info['upper'][2] for t in tiles]
+        slice_lb = [t.extent[4] for t in tiles]
+        slice_ub = [t.extent[5] for t in tiles]
         slice_scale = [t.info['voxel_size'][2] for t in tiles]
 
         z_scale = slice_scale[0]
@@ -343,13 +354,12 @@ class Piece:
         for (t, pb, pt) in zip(tiles, pad_bottom, pad_top):
             padding = [(0, 0), (0, 0), (pb, pt), (0, 0)]
             t.image = np.pad(t.image, padding)
-            t.info['lower'][2] = z_min
-            t.info['upper'][2] = z_max
+            t.extent[4:] = [z_min, z_max]
 
         return cls(tiles, path, piece)
 
     def get_image_extent(self):
-        extents = np.vstack([tile.extent for tile in self.tiles])
+        extents = np.vstack([tile.get_image_extent() for tile in self.tiles])
         xmin = extents[:, 0].min()
         xmax = extents[:, 1].max()
         ymin = extents[:, 2].min()
@@ -357,10 +367,8 @@ class Piece:
         return [xmin, xmax, ymin, ymax]
 
     def merge_tiles(self):
-        merged_lb = np.vstack([tile.info["lower"] for tile in self.tiles]).min(axis=0)
-        merged_ub = np.vstack([tile.info["upper"] for tile in self.tiles]).max(axis=0)
-        merged_lb[:2] = np.vstack([t.extent[::2] for t in self.tiles]).min(axis=0)
-        merged_ub[:2] = np.vstack([t.extent[1::2] for t in self.tiles]).max(axis=0)
+        merged_lb = np.vstack([t.extent[::2] for t in self.tiles]).min(axis=0)
+        merged_ub = np.vstack([t.extent[1::2] for t in self.tiles]).max(axis=0)
         voxel_size = self.tiles[0].info["voxel_size"]
 
         lb_pixels = np.floor(merged_lb / voxel_size).astype("i")
@@ -369,26 +377,17 @@ class Piece:
         shape = extent_pixels.tolist() + [3]
         merged_image = np.full(shape, fill_value=0, dtype=int)
 
-        print(merged_lb)
-        print(merged_ub)
-        print(shape)
-
         for tile in self.tiles:
-            tile_lb = tile.info['lower']
-            tile_lb[:2] = tile.extent[::2]
+            tile_lb = tile.extent[::2]
             tile_lb = np.round((tile_lb - merged_lb) / voxel_size).astype("i")
             tile_ub = tile_lb + tile.image.shape[:-1]
             s = tuple(np.s_[lb:ub] for lb, ub in zip(tile_lb, tile_ub))
-            #merged_image[s] = tile.image[::-1, ::-1, ::-1].swapaxes(0, 1)
-            merged_image[s] = tile.image[:]
+            merged_image[s] = tile.image
 
         info = {
             "lower": merged_lb,
-            "upper": merged_ub,
-            "extent": merged_ub - merged_lb,
             "voxel_size": voxel_size,
         }
-        #merged_image = merged_image.swapaxes(0, 1)
         return Tile(info, merged_image, self.path)
 
     def get_state(self):
@@ -430,18 +429,6 @@ class Piece:
     def clear_spiral(self, cell_type):
         self.spirals[cell_type].set_nodes([], [])
 
-    #def estimate_registration(self):
-    #    n = len(self.tiles)
-    #    shifts = np.zeros(shape=(n, n, 2))
-    #    images = [t.get_image() for t in self.tiles]
-    #    for r, i1 in enumerate(images):
-    #        for c, i2 in enumerate(images):
-    #            shifts[r, c, :] = phase_cross_correlation(i1, i2)
-    #    return shifts
-
-    #def align(self):
-    #    i1, i2 = zip(images[::
-    #    shifts = [phase_cross_correlation(i
 
 class Cochlea:
     def __init__(self, pieces, path):

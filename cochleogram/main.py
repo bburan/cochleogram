@@ -57,10 +57,6 @@ def main_prepare_lif():
         print(f'... processing {piece}')
         _ = load_lif(filename, piece, reprocess=args.reprocess)
 
-    #src_cache = src / 'processed' / 'max_xy_512_dtype_uint8'
-    #dest = src / 'cochleogram_analysis'
-    #src_cache.rename(dest)
-
 
 def main():
     import enaml
