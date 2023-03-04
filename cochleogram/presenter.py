@@ -105,6 +105,7 @@ class PointPlot(Atom):
             self.origin_artist.set_data([], [])
         self.artist.set_data(*nodes)
         self.artist.set_visible(self.visible)
+        self.origin_artist.set_visible(self.visible)
         self.updated = True
 
 
@@ -190,7 +191,7 @@ class ImagePlot(Atom):
     zorder = Int(10)
 
     display_mode = Enum("projection", "slice")
-    display_channel = Enum("All", "CtBP2", "MyosinVIIa")
+    display_channel = Enum("All", "CtBP2", "MyosinVIIa", "PMT")
     extent = Tuple()
     z_slice = Int(0)
     z_slice_min = Int(0)
@@ -284,14 +285,10 @@ class ImagePlot(Atom):
             self.needs_redraw = False
 
     def redraw(self, event=None):
-        channel_map = {'All': None, 'CtBP2': 0, 'MyosinVIIa': 1}
-        channel = channel_map[self.display_channel]
         z_slice = None if self.display_mode == 'projection' else self.z_slice
-        projection = self.display_mode == 'projection'
-        image = self.tile.get_image(channel=channel, z_slice=z_slice,
-                                    projection=projection).swapaxes(0, 1)
+        image = self.tile.get_image(channel=self.display_channel,
+                                    z_slice=z_slice).swapaxes(0, 1)
         self.artist.set_data(image)
-
         xlb, xub, ylb, yub = extent = self.tile.get_image_extent()[:4]
         self.artist.set_extent(extent)
         self.rectangle.set_bounds(xlb, ylb, xub-xlb, yub-ylb)
@@ -705,14 +702,14 @@ class Presenter(Atom):
         })
 
     def save_state(self):
-        state_filename = self.piece.path / f"{self.piece.name}.json"
+        state_filename = self.piece.path / f"{self.piece.name}_analysis.json"
         state = self.get_full_state()
         state_filename.write_text(json.dumps(state, indent=4))
         self.saved_state = state
         self.update()
 
     def load_state(self):
-        state_filename = self.piece.path / f"{self.piece.name}.json"
+        state_filename = self.piece.path / f"{self.piece.name}_analysis.json"
         if not state_filename.exists():
             raise IOError('No saved analysis found')
         state = json.loads(state_filename.read_text())

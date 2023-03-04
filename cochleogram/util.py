@@ -1,4 +1,5 @@
 from importlib.metadata import version
+import json
 import re
 from pathlib import Path
 import pickle
@@ -113,12 +114,14 @@ def load_lif(filename, piece, max_xy=512, dtype='uint8', reprocess=False):
     cache_filename = (
         filename.parent
         / filename.stem
-        / (filename.stem + f'_{piece}.pkl')
+        / (filename.stem + f'_{piece}')
     )
-    print(cache_filename)
-    if not reprocess and cache_filename.exists():
-        with cache_filename.open("rb") as fh:
-            return pickle.load(fh)
+    info_filename = cache_filename.with_suffix('.json')
+    img_filename = cache_filename.with_suffix('.npy')
+    if not reprocess and info_filename.exists() and img_filename.exists():
+        info = json.loads(info_filename.read_text())
+        img = np.load(img_filename)
+        return info, img
 
     from readlif.reader import LifFile
     from readlif.utilities import get_xml
@@ -164,9 +167,9 @@ def load_lif(filename, piece, max_xy=512, dtype='uint8', reprocess=False):
     # unit for a confocal analysis.
     info = {
         # XYZ voxel size in microns (um).
-        'voxel_size': voxel_size,
+        'voxel_size': voxel_size.tolist(),
         # XYZ origin in microns (um).
-        'lower': lower,
+        'lower': lower.tolist(),
         # Store version number of cochleogram along with 
         'version': version('cochleogram'),
         # Reader used to read in data
@@ -175,6 +178,11 @@ def load_lif(filename, piece, max_xy=512, dtype='uint8', reprocess=False):
         # implement specific tweaks for each confocal system we use.
         'system': system,
         'note': 'XY position from stage coords seem to be swapped',
+        'channels': [
+            {'name': 'CtBP2', 'display_color': 'red'},
+            {'name': 'MyosinVIIa', 'display_color': 'blue'},
+            {'name': 'PMT', 'display_color': 'white'},
+        ]
     }
 
     # Rescale to range 0 ... 1
@@ -189,15 +197,20 @@ def load_lif(filename, piece, max_xy=512, dtype='uint8', reprocess=False):
     img = img.astype(dtype)[::-1].swapaxes(0, 1)
 
     cache_filename.parent.mkdir(exist_ok=True, parents=True)
-    with cache_filename.open("wb") as fh:
-        pickle.dump((info, img), fh, pickle.HIGHEST_PROTOCOL)
-
+    info_filename.write_text(json.dumps(info, indent=2))
+    np.save(img_filename, img, allow_pickle=False)
     return info, img
 
 
-def process_lif(filename, reprocess):
-    for piece in list_lif_stacks(filename):
+def process_lif(filename, reprocess, cb=None):
+    pieces = list_lif_stacks(filename)
+    n_pieces = len(pieces)
+    if cb is None:
+        cb = lambda x: x
+    for p, piece in enumerate(pieces):
         _ = load_lif(filename, piece, reprocess=reprocess)
+        progress = int((p + 1) / n_pieces * 100)
+        cb(progress)
 
 
 def load_czi(filename, max_xy=512, dtype='uint8', reload=False):
@@ -316,9 +329,9 @@ def load_czi(filename, max_xy=512, dtype='uint8', reload=False):
 
 
 def list_pieces(path):
-    p_piece = re.compile('.*piece (\d+)\w?')
+    p_piece = re.compile('.*piece_(\d+)\w?')
     pieces = []
-    for path in Path(path).glob('*piece *.*'):
+    for path in Path(path).glob('*piece_*.*'):
         if path.name.endswith('.json'):
             continue
         piece = int(p_piece.match(path.stem).group(1))

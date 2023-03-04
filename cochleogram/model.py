@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import pickle
 import re
@@ -12,6 +13,14 @@ from scipy import signal
 from raster_geometry import sphere
 
 from cochleogram import util
+
+
+COLOR_SLICE = {
+    'red': np.s_[0],
+    'green': np.s_[1],
+    'blue': np.s_[2],
+    'white': np.s_[:],
+}
 
 
 class Points(Atom):
@@ -250,10 +259,10 @@ class Tile(Atom):
         return contains_x and contains_y
 
     @classmethod
-    def from_filename(cls, filename):
-        with filename.open('rb') as fh:
-            info, image = pickle.load(fh)
-        return cls(info, image, filename)
+    def from_filename(cls, img_filename):
+        image = np.load(img_filename)
+        info = json.loads(img_filename.with_suffix('.json').read_text())
+        return cls(info, image, img_filename)
 
     def to_coords(self, x, y, z=None):
         lower = self.info["lower"]
@@ -301,15 +310,32 @@ class Tile(Atom):
         #return tuple(self.extent[2:4] + self.extent[0:2])
         return tuple(self.extent[:4])
 
-    def get_image(self, channel=None, z_slice=None, projection=True):
-        if channel is None:
-            channel = np.s_[:]
+    def get_image(self, channel=None, z_slice=None):
         if z_slice is None:
-            z_slice = np.s_[:]
-        image = self.image[:, :, z_slice, channel]
-        if projection:
-            image = image.max(axis=2)
-        return image
+            image = self.image.max(axis=2)
+        else:
+            image = self.image[:, :, z_slice, :]
+        if channel is not None and channel != 'All':
+            if isinstance(channel, int):
+                c_info = self.info['channels'][channel]['display_color']
+                c = channel
+            else:
+                for c, c_info in enumerate(self.info['channels']):
+                    if c_info['name'] == channel:
+                        break
+                else:
+                    raise ValueError(f'Could not find channel {channel}')
+            color = c_info['display_color']
+            image_remapped = np.zeros_like(image)
+            if color == 'white':
+                # TOOD. A bit of a hack
+                image_remapped[..., :] = image[..., c][..., np.newaxis]
+            else:
+                s = COLOR_SLICE[color]
+                image_remapped[..., s] = image[..., c]
+            return image_remapped
+        else:
+            return image
 
     def get_state(self):
         return {"extent": self.extent}
@@ -365,16 +391,16 @@ class Piece:
     @classmethod
     def from_path(cls, path, piece=None):
         path = Path(path)
-        tile_filenames = sorted(path.glob(f"*piece {piece}*"))
+        tile_filenames = sorted(path.glob(f"*piece_{piece}*.npy"))
         tiles = [Tile.from_filename(f) for f in tile_filenames]
 
         # This pads the z-axis so that we have empty slices above/below stacks
         # such that they should align properly in z-space. This simplifies a
         # few downstream operations.
-        slice_n = [t.image.shape[2] for t in tiles]
-        slice_lb = [t.extent[4] for t in tiles]
-        slice_ub = [t.extent[5] for t in tiles]
-        slice_scale = [t.info['voxel_size'][2] for t in tiles]
+        slice_n = np.array([t.image.shape[2] for t in tiles])
+        slice_lb = np.array([t.extent[4] for t in tiles])
+        slice_ub = np.array([t.extent[5] for t in tiles])
+        slice_scale = np.array([t.info['voxel_size'][2] for t in tiles])
 
         z_scale = slice_scale[0]
         z_min = min(slice_lb)
@@ -448,7 +474,7 @@ class Piece:
 
         # Map to centroid
         xni, yni = tile.to_indices(xn, yn)
-        image = tile.get_image(channel=channel, projection=True)
+        image = tile.get_image(channel=channel)
         x_radius = tile.to_indices_delta(width, 'x')
         y_radius = tile.to_indices_delta(width, 'y')
         xnic, ynic = util.find_centroid(xni, yni, image, x_radius, y_radius, 4)

@@ -7,7 +7,8 @@ from enaml.qt.QtCore import Qt
 from enaml.widgets.api import (Action, ButtonGroup, CheckBox, Container,
                                DockArea, DockItem, FileDialogEx, Form, HGroup,
                                Html, Label, MainWindow, Menu, MenuBar,
-                               MPLCanvas, ObjectCombo, PushButton, Slider)
+                               MPLCanvas, ObjectCombo, ProgressBar,
+                               PushButton, Slider, Window)
 
 from cochleogram.presenter import Presenter
 from cochleogram import plot, util
@@ -115,7 +116,7 @@ enamldef MPLDockItem(DockItem):
             text = 'Display'
 
         ObjectCombo: display_channel:
-            items = ['All', 'CtBP2', 'MyosinVIIa']
+            items = ['All', 'CtBP2', 'MyosinVIIa', 'PMT']
             selected << 'All' if presenter.current_artist is None else presenter.current_artist.display_channel
             selected ::
                 presenter.set_display_channel(selected, display_apply.checked)
@@ -275,7 +276,7 @@ enamldef MPLDockItem(DockItem):
                 clicked ::
                     button = question(self, 'Confirm action', f'Are you sure you want to overwrite the existing cells?')
                     if button is not None and button.text == 'Yes':
-                        n = presenter.action_guess_cells(guess_width.value * 1e-6, guess_spacing.value * 1e-6)
+                        n = presenter.action_guess_cells(guess_width.value, guess_spacing.value)
                         information(self, 'Info', f'Found {n} cells')
 
         HGroup: action_copy_exclusion:
@@ -304,6 +305,24 @@ enamldef MPLDockItem(DockItem):
             toolbar_visible = False
             initialized ::
                 deferred_call(bind, figure, presenter)
+
+
+enamldef ProgressWindow(Window): window:
+
+    title = 'Processing ...'
+    modality = 'application_modal'
+    always_on_top = True
+    alias progress: pb.value
+
+    Container:
+        ProgressBar: pb:
+            pass
+
+        PushButton:
+            text = 'Ok'
+            enabled << (pb.value == pb.maximum)
+            clicked ::
+                window.close()
 
 
 enamldef CochleagramWindow(MainWindow): window:
@@ -339,8 +358,10 @@ enamldef CochleagramWindow(MainWindow): window:
                 triggered ::
                     path = FileDialogEx.get_open_file_name(window, current_path=window.current_path)
                     if path:
-                        util.process_lif(path, reprocess=True)
-                        information(window, 'Processing', 'Lif file has been processed. You may open the processed data now.')
+                        pp = ProgressWindow()
+                        pp.show()
+                        cb = lambda x, pp=pp: setattr(pp, 'progress', x)
+                        deferred_call(util.process_lif, path, reprocess=True, cb=cb)
 
             Action:
                 text = 'Save analysis\tCtrl+S'
