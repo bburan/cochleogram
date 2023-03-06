@@ -396,6 +396,11 @@ class Piece:
         self.spirals = {k: Points() for k in keys}
         self.cells = {k: Points() for k in keys}
 
+    @property
+    def channel_names(self):
+        # We assume that each tile has the same set of channels
+        return [c['name'] for c in self.tiles[0].info['channels']]
+
     @classmethod
     def from_path(cls, path, piece=None):
         path = Path(path)
