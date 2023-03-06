@@ -260,6 +260,7 @@ enamldef MPLDockItem(DockItem):
         HGroup: action_guess_cells:
             padding = 0
             align_widths = False
+            share_layout = True
             trailing_spacer = spacer(0)
             enabled << presenter.current_spiral_artist is not None and presenter.current_spiral_artist.has_spline
             Label:
@@ -271,14 +272,19 @@ enamldef MPLDockItem(DockItem):
             FloatField: guess_spacing:
                 value = 5.0
             Label:
-                text = 'μm'
+                text = 'μm using'
+            ObjectCombo: guess_channel:
+                items = presenter.piece.channel_names
+                selected << items[0]
 
             PushButton:
                 text = 'update'
                 clicked ::
                     button = question(self, 'Confirm action', f'Are you sure you want to overwrite the existing cells?')
                     if button is not None and button.text == 'Yes':
-                        n = presenter.action_guess_cells(guess_width.value, guess_spacing.value)
+                        n = presenter.action_guess_cells(guess_width.value,
+                                                         guess_spacing.value,
+                                                         guess_channel.selected)
                         information(self, 'Info', f'Found {n} cells')
 
         HGroup: action_copy_exclusion:

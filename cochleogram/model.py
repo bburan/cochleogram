@@ -485,8 +485,9 @@ class Piece:
         for tile in self.tiles:
             tile.set_state(state['tiles'][tile.source.stem])
 
-    def guess_cells(self, cell_type, width, spacing):
-        channel = 'CtBP2' if cell_type == 'IHC' else 'MyosinVIIa'
+    def guess_cells(self, cell_type, width, spacing, channel):
+        log.info('Finding %s assuming within %f um of spiral and spaced %f microns on channel %s',
+                 cell_type, width, spacing, channel)
         tile = self.merge_tiles()
         x, y = self.spirals[cell_type].interpolate(resolution=0.0001)
         i = tile.map(x, y, channel, width=width)

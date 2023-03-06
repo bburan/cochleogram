@@ -427,8 +427,9 @@ class Presenter(Atom):
         if submode is not None:
             self.interaction_submode = submode
 
-    def action_guess_cells(self, width=None, spacing=None):
-        n = self.piece.guess_cells(self.interaction_mode, width, spacing)
+    def action_guess_cells(self, width, spacing, channel):
+        n = self.piece.guess_cells(self.interaction_mode, width, spacing,
+                                   channel)
         self.set_interaction_mode(self.interaction_mode, 'cells')
         return n
 
