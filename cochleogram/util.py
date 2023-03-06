@@ -76,7 +76,7 @@ def find_centroid(x, y, image, rx, ry, factor=4):
     for xi, yi in zip(x, y):
         ylb, yub = int(round(yi-ry)), int(round(yi+ry))
         xlb, xub = int(round(xi-rx)), int(round(xi+rx))
-        i = image[ylb:yub, xlb:xub]
+        i = image[ylb:yub, xlb:xub].astype('int64')
         yc, xc = ndimage.center_of_mass(i ** factor)
         x_center.append(xc - rx)
         y_center.append(yc - ry)
