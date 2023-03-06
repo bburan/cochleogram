@@ -112,6 +112,8 @@ class LinePlot(PointPlot):
     has_spline = Bool(False)
     has_exclusion = Bool(False)
 
+    exclude_visible = Bool(False)
+
     start_drag = Value()
     end_drag = Value()
 
@@ -154,6 +156,10 @@ class LinePlot(PointPlot):
     def remove_exclude(self, x, y):
         self.points.remove_exclude(x, y)
 
+    def _observe_exclude_visible(self, event=False):
+        self.needs_redraw = True
+        deferred_call(self.redraw_if_needed)
+
     def redraw(self, event=None):
         super().redraw()
 
@@ -168,12 +174,13 @@ class LinePlot(PointPlot):
         self.has_spline = len(xi) > 0
         self.spline_artist.set_data(xi, yi)
         self.spline_artist.set_visible(self.visible)
-        self.exclude_artist.set_visible(self.visible)
         self.new_exclude_artist.set_visible(self.visible)
 
         self.has_exclusion = len(self.points.exclude) > 0
         path = make_plot_path(self.points, self.points.exclude)
+
         self.exclude_artist.set_path(path)
+        self.exclude_artist.set_visible(self.exclude_visible)
 
         if self.start_drag and self.end_drag:
             try:
@@ -410,12 +417,15 @@ class Presenter(Atom):
     def _update_plots(self, event=None):
         for artist in self.point_artists.values():
             artist.visible = False
+            if hasattr(artist, 'exclude_visible'):
+                artist.exclude_visible = False
         if self.interaction_mode == 'tiles':
             self.current_spiral_artist = None
             self.current_cells_artist = None
         else:
             self.current_spiral_artist = self.point_artists[self.interaction_mode, 'spiral']
             self.current_cells_artist = self.point_artists[self.interaction_mode, 'cells']
+            self.current_spiral_artist.exclude_visible = True
             if self.interaction_submode in ('spiral', 'exclude'):
                 self.current_spiral_artist.visible = True
             else:
