@@ -43,11 +43,6 @@ class PointPlot(Atom):
     #: Artist that plots the nodes the user specified
     artist = Value()
 
-    #: Artist that plots the starting point (i.e., the first node). This is a
-    #: visual clue that lets the user know that the arc is proceeding in the
-    #: right direction.
-    origin_artist = Value()
-
     #: Artist that draws the spline connecting the nodes the user selected. The
     #: spline is automatically updated as the user adds/removes nodes. The
     #: spline is used for many calculations so it is important to ensure it
@@ -67,7 +62,6 @@ class PointPlot(Atom):
         super().__init__(**kwargs)
         self.axes = axes
         self.artist, = axes.plot([], [], "ko", mec="w", mew=1, zorder=100)
-        self.origin_artist, = axes.plot([], [], "o", color='FireBrick', mec="w", mew=1, zorder=90, ms=10)
         self.points = points
         points.observe('updated', self.request_redraw)
 
@@ -78,7 +72,7 @@ class PointPlot(Atom):
         pass
 
     def add_point(self, x, y):
-        self.points.add_node(x, y)
+        self.points.add_node(x, y, hit_threshold=2.5)
 
     def set_origin(self, x, y):
         self.points.set_origin(x, y)
@@ -99,13 +93,8 @@ class PointPlot(Atom):
     def redraw(self, event=None):
         nodes = self.points.get_nodes()
         self.has_nodes = len(nodes[0]) > 0
-        if self.has_nodes:
-            self.origin_artist.set_data(nodes[0][0], nodes[1][0])
-        else:
-            self.origin_artist.set_data([], [])
         self.artist.set_data(*nodes)
         self.artist.set_visible(self.visible)
-        self.origin_artist.set_visible(self.visible)
         self.updated = True
 
 
@@ -114,6 +103,11 @@ class LinePlot(PointPlot):
     spline_artist = Value()
     exclude_artist = Value()
     new_exclude_artist = Value()
+
+    #: Artist that plots the starting point (i.e., the first node). This is a
+    #: visual clue that lets the user know that the arc is proceeding in the
+    #: right direction.
+    origin_artist = Value()
 
     has_spline = Bool(False)
     has_exclusion = Bool(False)
@@ -130,6 +124,7 @@ class LinePlot(PointPlot):
         (self.spline_artist,) = axes.plot(
             [], [], "k-", zorder=90, path_effects=spline_effect
         )
+        self.origin_artist, = axes.plot([], [], "o", color='FireBrick', mec="w", mew=1, zorder=90, ms=10)
 
         verts = np.zeros((0, 2))
         path = mpath.Path(verts, [])
@@ -161,6 +156,14 @@ class LinePlot(PointPlot):
 
     def redraw(self, event=None):
         super().redraw()
+
+        if self.has_nodes:
+            nodes = self.points.get_nodes()
+            self.origin_artist.set_data(nodes[0][0], nodes[1][0])
+        else:
+            self.origin_artist.set_data([], [])
+        self.origin_artist.set_visible(self.visible)
+
         xi, yi = self.points.interpolate()
         self.has_spline = len(xi) > 0
         self.spline_artist.set_data(xi, yi)
