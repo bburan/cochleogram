@@ -55,7 +55,7 @@ def load_state(parent, presenters):
     information(parent, 'Analysis loaded', 'Analysis has been loaded.')
 
 
-CELLS = ['IHC', 'OHC1', 'OHC2', 'OHC3']
+CELLS = ['IHC', 'OHC1', 'OHC2', 'OHC3', 'Extra']
 
 
 class CochleogramCanvas(MPLCanvas):
@@ -188,7 +188,8 @@ enamldef MPLDockItem(DockItem):
             Looper:
                 iterable = ['spiral', 'exclude', 'cells']
                 PushButton:
-                    enabled << presenter.interaction_mode != 'tiles'
+                    enabled << (presenter.interaction_mode != 'tiles') and \
+                        not (presenter.interaction_mode == 'Extra' and loop_item != 'cells')
                     text = loop_item
                     group = submode_group
                     checkable = True
@@ -447,6 +448,7 @@ enamldef CochleagramWindow(MainWindow): window:
                             <dt>1</dt> <dd>Select OHC1 mode</dd>
                             <dt>2</dt> <dd>Select OHC2 mode</dd>
                             <dt>3</dt> <dd>Select OHC3 mode</dd>
+                            <dt>4</dt> <dd>Select extra mode</dd>
                             <dt>s</dt> <dd>Select spiral tool</dd>
                             <dt>e</dt> <dd>Select exclude tool</dd>
                             <dt>c</dt> <dd>Select cell tool</dd>

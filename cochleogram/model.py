@@ -392,7 +392,7 @@ class Piece:
         self.path = path
         self.name = f'{path.stem}_piece_{piece}'
         self.piece = piece
-        keys = 'IHC', 'OHC1', 'OHC2', 'OHC3'
+        keys = 'IHC', 'OHC1', 'OHC2', 'OHC3', 'Extra'
         self.spirals = {k: Points() for k in keys}
         self.cells = {k: Points() for k in keys}
 

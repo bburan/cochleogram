@@ -323,7 +323,7 @@ class Presenter(Atom):
     zorder_selected = Int(20)
     zorder_unselected = Int(10)
 
-    interaction_mode = Enum("tiles", "IHC", "OHC1", "OHC2", "OHC3")
+    interaction_mode = Enum("tiles", "IHC", "OHC1", "OHC2", "OHC3", "Extra")
     interaction_submode = Enum("spiral", "exclude", "cells")
 
     pan_event = Value()
@@ -351,7 +351,7 @@ class Presenter(Atom):
         for artist in self.tile_artists.values():
             artist.observe('updated', self.update)
         self.current_artist_index = None
-        for key in ('IHC', 'OHC1', 'OHC2', 'OHC3'):
+        for key in ('IHC', 'OHC1', 'OHC2', 'OHC3', 'Extra'):
             cells = PointPlot(self.axes, self.piece.cells[key], name=key)
             spiral = LinePlot(self.axes, self.piece.spirals[key], name=key)
             cells.observe('updated', self.update)
@@ -483,6 +483,8 @@ class Presenter(Atom):
             deferred_call(self.set_interaction_mode, 'OHC2', None)
         elif key == '3':
             deferred_call(self.set_interaction_mode, 'OHC3', None)
+        elif key == '4':
+            deferred_call(self.set_interaction_mode, 'Extra', None)
         elif (key == 'escape') and (self.drag_event is not None) and (self.interaction_submode == 'exclude'):
             self.end_drag_exclude(event, keep=False)
         elif self.interaction_mode == 'tiles' and self.current_artist is not None:
@@ -542,6 +544,10 @@ class Presenter(Atom):
 
     def button_press_point_plot(self, event):
         if event.button != MouseButton.LEFT:
+            return
+        if self.interaction_mode == 'Extra' and self.interaction_submode != 'cells':
+            # Special case. I don't want to add spiral/exclude regions to extra
+            # cells data structure for now.
             return
         if event.key == 'control' and event.xdata is not None:
             if self.interaction_submode == 'spiral':
