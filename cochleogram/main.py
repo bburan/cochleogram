@@ -1,5 +1,6 @@
 import argparse
 import configparser
+import logging
 from pathlib import Path
 
 from enaml.qt.QtCore import QStandardPaths
@@ -56,6 +57,7 @@ def main_prepare_lif():
 def main():
     import enaml
     from enaml.qt.qt_application import QtApplication
+    logging.basicConfig(level='INFO')
 
     from cochleogram.presenter import Presenter
 

@@ -1,3 +1,6 @@
+import logging
+log = logging.getLogger(__name__)
+
 import json
 from pathlib import Path
 import pickle
@@ -298,7 +301,7 @@ class Tile(Atom):
         else:
             raise ValueError('Unsupported axis')
 
-    def nuclei_template(self, radius=2.5e-6):
+    def nuclei_template(self, radius=2.5):
         voxel_size = self.info["voxel_size"][0]
         pixel_radius = int(np.round(radius / voxel_size))
         template = sphere(pixel_radius * 3, pixel_radius)
@@ -343,13 +346,18 @@ class Tile(Atom):
     def set_state(self, state):
         self.extent = state["extent"]
 
-    def map(self, x, y, channel, smooth_radius=2.5e-6, width=5e-6):
+    def map(self, x, y, channel, smooth_radius=2.5, width=5):
         """
         Calculate intensity in the specified channel for the xy coordinates.
 
         Optionally apply image smoothing and/or a maximum search.
         """
-        image = self.get_image(channel)
+        # get_image returns a Nx3 array where the final dimension is RGB color.
+        # We are only requesting one channel, but it is possible that the
+        # information in the channel will be split among multiple RGB colors
+        # depending on the specific color it is coded as. The sum should never
+        # exceed 255.
+        image = self.get_image(channel).sum(axis=-1)
         if smooth_radius:
             template = self.nuclei_template(smooth_radius)
             template = template.mean(axis=-1)
@@ -473,8 +481,7 @@ class Piece:
             tile.set_state(state['tiles'][tile.source.stem])
 
     def guess_cells(self, cell_type, width, spacing):
-        channel = 0 if cell_type == 'IHC' else 1
-        #width = 5e-6 if cell_type == 'IHC' else 2.5e-6
+        channel = 'CtBP2' if cell_type == 'IHC' else 'MyosinVIIa'
         tile = self.merge_tiles()
         x, y = self.spirals[cell_type].interpolate(resolution=0.0001)
         i = tile.map(x, y, channel, width=width)
@@ -482,11 +489,15 @@ class Piece:
 
         # Map to centroid
         xni, yni = tile.to_indices(xn, yn)
-        image = tile.get_image(channel=channel)
+        image = tile.get_image(channel=channel).max(axis=-1)
         x_radius = tile.to_indices_delta(width, 'x')
         y_radius = tile.to_indices_delta(width, 'y')
+        log.info('Searching for centroid within %ix%i pixels of spiral', x_radius,
+                 y_radius)
         xnic, ynic = util.find_centroid(xni, yni, image, x_radius, y_radius, 4)
         xnc, ync = tile.to_coords(xnic, ynic)
+        log.info('Shifted points up to %.0f x %.0f microns',
+                 np.max(np.abs(xnc - xn)), np.max(np.abs(ync - yn)))
         self.cells[cell_type].set_nodes(xnc, ync)
         return len(xnc)
 
