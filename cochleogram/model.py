@@ -447,6 +447,14 @@ class Piece:
             "lower": merged_lb,
             "voxel_size": voxel_size,
         }
+
+        t_base = self.tiles[0]
+        extra_keys = set(t_base.info.keys()) - set(('lower', 'voxel_size'))
+        for k in extra_keys:
+            for t in self.tiles[1:]:
+                if t_base.info[k] != t.info[k]:
+                    raise ValueError(f'Cannot merge tiles. {k} differs.')
+            info[k] = t_base.info[k]
         return Tile(info, merged_image, self.path)
 
     def get_state(self):
