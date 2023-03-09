@@ -4,7 +4,7 @@ from enaml.application import deferred_call
 from enaml.core.api import Looper
 from enaml.icon import Icon, IconImage
 from enaml.image import Image
-from enaml.layout.api import align, hbox, InsertTab, spacer, TabLayout, vbox
+from enaml.layout.api import align, hbox, InsertTab, RemoveItem, spacer, TabLayout, vbox
 from enaml.stdlib.fields import FloatField
 from enaml.stdlib.message_box import information, question
 from enaml.qt.QtCore import Qt
@@ -14,8 +14,9 @@ from enaml.widgets.api import (Action, ButtonGroup, CheckBox, Container,
                                MPLCanvas, ObjectCombo, ProgressBar, PushButton,
                                Slider, Window)
 
-from cochleogram.presenter import Presenter
 from cochleogram import plot, util
+from cochleogram.model import Cochlea
+from cochleogram.presenter import Presenter
 
 
 def load_icon(name):
@@ -102,10 +103,10 @@ enamldef MPLDockItem(DockItem):
                 hbox(display_label, display_channel, display_as_label,
                      display_mode, z_slice_number_label, z_slice,
                      display_apply, highlight_selected),
-                hbox(mode_label, mode_buttons, spacer, submode_buttons),
+                hbox(tool_label, mode_buttons, spacer, load_analysis, save_analysis),
                 hbox(action_label, action_clear_spiral, action_clear_cells,
                      action_simplify_exclusions, action_merge_ohc_exclusions,
-                     spacer, load_analysis, save_analysis, spacing=0),
+                     spacer, spacing=0),
                 action_guess_cells,
                 action_copy_exclusion,
                 canvas,
@@ -113,11 +114,11 @@ enamldef MPLDockItem(DockItem):
             align('v_center', display_label, display_channel, display_as_label,
                   display_mode, z_slice_number_label, z_slice, display_apply,
                   highlight_selected),
-            align('v_center', mode_label, mode_buttons),
+            align('v_center', tool_label, mode_buttons),
             align('v_center', action_label, action_clear_spiral,
                   action_clear_cells, action_simplify_exclusions,
                   action_merge_ohc_exclusions),
-            align('left', display_label, mode_label, action_label),
+            align('left', display_label, tool_label, action_label),
             align('left', display_channel, mode_buttons, action_clear_spiral,
                   action_guess_cells, action_copy_exclusion),
             guess_width.width == 50,
@@ -172,45 +173,46 @@ enamldef MPLDockItem(DockItem):
         ButtonGroup: mode_group:
             pass
 
-        ButtonGroup: submode_group:
+        ButtonGroup: tool_group:
             pass
 
-        Label: mode_label:
-            text << 'Edit'
+        Label: tool_label:
+            text = 'Tool'
 
         HGroup: mode_buttons:
             padding = 0
             spacing = 0
+            align_widths = False
             trailing_spacer = spacer(0)
-            Looper:
-                iterable = ['tiles'] + CELLS
-                PushButton:
-                    text = loop_item
-                    group = mode_group
-                    checkable = True
-                    checked << loop_item == presenter.interaction_mode
-                    toggled ::
-                        if self.checked:
-                            presenter.interaction_mode = loop_item
 
-        HGroup: submode_buttons:
-            padding = 0
-            spacing = 0
-            leading_spacer = spacer(0)
+            PushButton:
+                icon = load_icon('tile')
+                icon_size = (20, 20)
+                tool_tip = 'tile'
+                group = tool_group
+                checkable = True
+                checked << presenter.tool == 'tile'
+                toggled ::
+                    if self.checked:
+                        presenter.tool = 'tile'
+
+            ObjectCombo:
+                items = CELLS
+                selected := presenter.cells
+
             Looper:
                 iterable = ['spiral', 'exclude', 'cells']
                 PushButton:
                     icon = load_icon(loop_item)
-                    icon_size = (25, 25)
+                    icon_size = (20, 20)
                     tool_tip = loop_item
-                    enabled << (presenter.interaction_mode != 'tiles') and \
-                        not (presenter.interaction_mode == 'Extra' and loop_item != 'cells')
-                    group = submode_group
+                    enabled << not (presenter.cells == 'Extra' and loop_item != 'cells')
+                    group = tool_group
                     checkable = True
-                    checked << loop_item == presenter.interaction_submode
+                    checked << loop_item == presenter.tool
                     toggled ::
                         if self.checked:
-                            presenter.interaction_submode = loop_item
+                            presenter.tool = loop_item
 
         Label: action_label:
             text = 'Actions'
@@ -239,7 +241,7 @@ enamldef MPLDockItem(DockItem):
                 button = question(self, 'Confirm action', m)
                 if button is not None and button.text == 'Yes':
                     try:
-                        presenter.action_simplify_exclusion(presenter.interaction_mode)
+                        presenter.action_simplify_exclusion(presenter.cells)
                     except Exception as e:
                         information(self, 'Error', str(e))
 
@@ -310,7 +312,7 @@ enamldef MPLDockItem(DockItem):
             Label:
                 text = 'Copy excluded regions to'
             ObjectCombo: copy_exclusion_to:
-                items << [c for c in CELLS if c != presenter.interaction_mode]
+                items << [c for c in CELLS if c != presenter.cells]
             PushButton:
                 text = 'Copy'
                 clicked ::

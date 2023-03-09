@@ -330,8 +330,8 @@ class Presenter(Atom):
     zorder_selected = Int(20)
     zorder_unselected = Int(10)
 
-    interaction_mode = Enum("tiles", "IHC", "OHC1", "OHC2", "OHC3", "Extra")
-    interaction_submode = Enum("spiral", "exclude", "cells")
+    cells = Enum("IHC", "OHC1", "OHC2", "OHC3", "Extra")
+    tool = Enum("tile", "spiral", "exclude", "cells")
 
     pan_event = Value()
     pan_xlim = Value()
@@ -418,52 +418,51 @@ class Presenter(Atom):
             self.current_artist.zorder = self.zorder_selected
         self.redraw()
 
-    @observe('interaction_mode', 'interaction_submode')
+    @observe('cells', 'tool')
     def _update_plots(self, event=None):
         for artist in self.point_artists.values():
             artist.visible = False
             if hasattr(artist, 'exclude_visible'):
                 artist.exclude_visible = False
-        if self.interaction_mode == 'tiles':
+        if self.tool == 'tile':
             self.current_spiral_artist = None
             self.current_cells_artist = None
         else:
-            self.current_spiral_artist = self.point_artists[self.interaction_mode, 'spiral']
-            self.current_cells_artist = self.point_artists[self.interaction_mode, 'cells']
+            self.current_spiral_artist = self.point_artists[self.cells, 'spiral']
+            self.current_cells_artist = self.point_artists[self.cells, 'cells']
             self.current_spiral_artist.exclude_visible = True
-            if self.interaction_submode in ('spiral', 'exclude'):
+            if self.tool in ('spiral', 'exclude'):
                 self.current_spiral_artist.visible = True
             else:
                 self.current_cells_artist.visible = True
 
-    def set_interaction_mode(self, mode=None, submode=None):
-        if mode is not None:
-            self.interaction_mode = mode
-        if submode is not None:
-            self.interaction_submode = submode
+    def set_interaction_mode(self, cells=None, tool=None):
+        if cells is not None:
+            self.cells = cells
+        if tool is not None:
+            self.tool = tool
 
     def action_guess_cells(self, width, spacing, channel):
-        n = self.piece.guess_cells(self.interaction_mode, width, spacing,
-                                   channel)
-        self.set_interaction_mode(self.interaction_mode, 'cells')
+        n = self.piece.guess_cells(self.cells, width, spacing, channel)
+        self.set_interaction_mode(None, 'cells')
         return n
 
     def action_clear_cells(self):
-        self.piece.clear_cells(self.interaction_mode)
-        self.set_interaction_mode(self.interaction_mode, 'cells')
+        self.piece.clear_cells(self.cells)
+        self.set_interaction_mode(None, 'cells')
 
     def action_clear_spiral(self):
-        self.piece.clear_spiral(self.interaction_mode)
-        self.set_interaction_mode(self.interaction_mode, 'spiral')
+        self.piece.clear_spiral(self.cells)
+        self.set_interaction_mode(None, 'spiral')
 
     def action_clone_spiral(self, to_spiral, distance):
-        xn, yn = self.piece.spirals[self.interaction_mode].expand_nodes(distance)
+        xn, yn = self.piece.spirals[self.cells].expand_nodes(distance)
         self.piece.spirals[to_spiral].set_nodes(xn, yn)
 
     def action_copy_exclusion(self, to_spiral):
         if not self.point_artists[to_spiral, 'spiral'].has_spline:
             raise ValueError(f'Must create spiral for {to_spiral} first')
-        for s, e in self.piece.spirals[self.interaction_mode].exclude:
+        for s, e in self.piece.spirals[self.cells].exclude:
             self.piece.spirals[to_spiral].add_exclude(s, e)
 
     def action_merge_exclusion(self, *spirals):
@@ -489,7 +488,7 @@ class Presenter(Atom):
         elif key == 'c':
             deferred_call(self.set_interaction_mode, None, 'cells')
         elif key == 't':
-            deferred_call(self.set_interaction_mode, 'tiles', None)
+            deferred_call(self.set_interaction_mode, None, 'tile')
         elif key == 'i':
             deferred_call(self.set_interaction_mode, 'IHC', None)
         elif key == '1':
@@ -500,14 +499,14 @@ class Presenter(Atom):
             deferred_call(self.set_interaction_mode, 'OHC3', None)
         elif key == '4':
             deferred_call(self.set_interaction_mode, 'Extra', None)
-        elif (key == 'escape') and (self.drag_event is not None) and (self.interaction_submode == 'exclude'):
+        elif (key == 'escape') and (self.drag_event is not None) and (self.tool == 'exclude'):
             self.end_drag_exclude(event, keep=False)
-        elif self.interaction_mode == 'tiles' and self.current_artist is not None:
-            self.key_press_tiles(event)
+        elif self.tool == 'tile' and self.current_artist is not None:
+            self.key_press_tile(event)
         else:
             self.key_press_point_plot(event)
 
-    def key_press_tiles(self, event):
+    def key_press_tile(self, event):
         if event.key in ["right", "left", "up", "down"]:
             if self.current_artist is not None:
                 self.current_artist.move_image(event.key)
@@ -543,10 +542,10 @@ class Presenter(Atom):
     def button_press(self, event):
         if event.button == MouseButton.LEFT and event.xdata is not None:
             self.start_pan(event)
-        elif self.interaction_mode != 'tiles':
+        elif self.tool != 'tile':
             self.button_press_point_plot(event)
 
-    def button_release_tiles(self, event):
+    def button_release_tile(self, event):
         if event.button == MouseButton.LEFT and event.xdata is not None:
             for i, artist in enumerate(self.tile_artists.values()):
                 if artist.contains(event.xdata, event.ydata):
@@ -558,26 +557,26 @@ class Presenter(Atom):
     def button_press_point_plot(self, event):
         if event.button != MouseButton.RIGHT:
             return
-        if self.interaction_mode == 'Extra' and self.interaction_submode != 'cells':
+        if self.cells == 'Extra' and self.tool != 'cells':
             # Special case. I don't want to add spiral/exclude regions to extra
             # cells data structure for now.
             return
         if event.key == 'control' and event.xdata is not None:
-            if self.interaction_submode == 'spiral':
-                self.point_artists[self.interaction_mode, 'spiral'].set_origin(event.xdata, event.ydata)
+            if self.tool == 'spiral':
+                self.point_artists[self.cells, 'spiral'].set_origin(event.xdata, event.ydata)
         elif event.key == "shift" and event.xdata is not None:
-            if self.interaction_submode == 'cells':
-                self.point_artists[self.interaction_mode, 'cells'].remove_point(event.xdata, event.ydata)
-            elif self.interaction_submode == 'spiral':
-                self.point_artists[self.interaction_mode, 'spiral'].remove_point(event.xdata, event.ydata)
-            elif self.interaction_submode == 'exclude':
-                self.point_artists[self.interaction_mode, 'spiral'].remove_exclude(event.xdata, event.ydata)
+            if self.tool == 'cells':
+                self.point_artists[self.cells, 'cells'].remove_point(event.xdata, event.ydata)
+            elif self.tool == 'spiral':
+                self.point_artists[self.cells, 'spiral'].remove_point(event.xdata, event.ydata)
+            elif self.tool == 'exclude':
+                self.point_artists[self.cells, 'spiral'].remove_exclude(event.xdata, event.ydata)
         elif event.xdata is not None:
-            if self.interaction_submode == 'cells':
-                self.point_artists[self.interaction_mode, 'cells'].add_point(event.xdata, event.ydata)
-            elif self.interaction_submode == 'spiral':
-                self.point_artists[self.interaction_mode, 'spiral'].add_point(event.xdata, event.ydata)
-            elif self.interaction_submode == 'exclude':
+            if self.tool == 'cells':
+                self.point_artists[self.cells, 'cells'].add_point(event.xdata, event.ydata)
+            elif self.tool == 'spiral':
+                self.point_artists[self.cells, 'spiral'].add_point(event.xdata, event.ydata)
+            elif self.tool == 'exclude':
                 if self.drag_event is None:
                     self.start_drag_exclude(event)
                 else:
@@ -586,10 +585,10 @@ class Presenter(Atom):
     def button_release(self, event):
         if event.button == MouseButton.LEFT:
             if not self.pan_performed:
-                self.button_release_tiles(event)
+                self.button_release_tile(event)
             self.end_pan(event)
         elif event.button == MouseButton.RIGHT:
-            if self.interaction_mode == 'tiles':
+            if self.tool == 'tile':
                 self.drag_event = None
 
     def motion(self, event):
@@ -630,9 +629,9 @@ class Presenter(Atom):
 
     def motion_drag(self, event):
         if event.xdata is None:
-            if self.interaction_submode == 'exclude':
+            if self.tool == 'exclude':
                 self.end_drag_exclude(event, keep=False)
-        elif self.interaction_mode == 'tiles' and self.current_artist is not None:
+        elif self.tool == 'tile' and self.current_artist is not None:
             dx = event.xdata - self.drag_event.xdata
             dy = event.ydata - self.drag_event.ydata
             self.current_artist.drag_image(dx, dy)
@@ -708,8 +707,8 @@ class Presenter(Atom):
         artist_states = {k: a.get_state() for k, a in self.tile_artists.items()}
         point_artist_states = {':'.join(k): a.get_state() for k, a in self.point_artists.items()}
         return {
-            "interaction_mode": self.interaction_mode,
-            "interaction_submode": self.interaction_submode,
+            "cells": self.cells,
+            "tool": self.tool,
             "artists": artist_states,
             "point_artists": point_artist_states,
         }
@@ -719,8 +718,7 @@ class Presenter(Atom):
             self.tile_artists[k].set_state(s)
         for k, s in state["point_artists"].items():
             self.point_artists[tuple(k.split(':'))].set_state(s)
-        self.set_interaction_mode(state["interaction_mode"],
-                                  state["interaction_submode"])
+        self.set_interaction_mode(state["cells"], state["tool"])
 
     def get_full_state(self):
         return deepcopy({
@@ -741,7 +739,6 @@ class Presenter(Atom):
             raise IOError('No saved analysis found')
         state = json.loads(state_filename.read_text())
         self.piece.set_state(state['data'])
-        self.set_state(state['view'])
         self.saved_state = state
         self.update()
 
