@@ -1,7 +1,7 @@
 [project]
 name = "cochleogram"
 description = "Module for creating cochleograms from confocal images"
-readme = "readme.md"
+readme = "readme.rst"
 requires-python = ">=3.7"
 license = {file = "LICENSE.txt"}
 authors = [
@@ -25,6 +25,7 @@ dynamic = ["version"]
 [project.optional-dependencies]
 czi = ["aicspylibczi"]
 lif = ["readlif"]
+dev = ["docutils"]
 
 [project.scripts]
 cochleogram = "cochleogram.main:main"
