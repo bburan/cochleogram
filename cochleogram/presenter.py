@@ -337,6 +337,11 @@ class Presenter(Atom):
     pan_xlim = Value()
     pan_ylim = Value()
 
+    #: True if we actually had a pan event. This allows us to distinguish
+    #: between clicks that select a tile vs. clicks that are intended to start
+    #: a pan.
+    pan_performed = Bool(False)
+
     drag_event = Value()
     drag_x = Value()
     drag_y = Value()
@@ -536,14 +541,12 @@ class Presenter(Atom):
         self.redraw()
 
     def button_press(self, event):
-        if event.button == MouseButton.RIGHT and event.xdata is not None:
+        if event.button == MouseButton.LEFT and event.xdata is not None:
             self.start_pan(event)
-        elif self.interaction_mode == 'tiles':
-            self.button_press_tiles(event)
-        else:
+        elif self.interaction_mode != 'tiles':
             self.button_press_point_plot(event)
 
-    def button_press_tiles(self, event):
+    def button_release_tiles(self, event):
         if event.button == MouseButton.LEFT and event.xdata is not None:
             for i, artist in enumerate(self.tile_artists.values()):
                 if artist.contains(event.xdata, event.ydata):
@@ -553,7 +556,7 @@ class Presenter(Atom):
                 self.current_artist_index = None
 
     def button_press_point_plot(self, event):
-        if event.button != MouseButton.LEFT:
+        if event.button != MouseButton.RIGHT:
             return
         if self.interaction_mode == 'Extra' and self.interaction_submode != 'cells':
             # Special case. I don't want to add spiral/exclude regions to extra
@@ -581,9 +584,11 @@ class Presenter(Atom):
                     self.end_drag_exclude(event, keep=True)
 
     def button_release(self, event):
-        if event.button == MouseButton.RIGHT:
+        if event.button == MouseButton.LEFT:
+            if not self.pan_performed:
+                self.button_release_tiles(event)
             self.end_pan(event)
-        elif event.button == MouseButton.LEFT:
+        elif event.button == MouseButton.RIGHT:
             if self.interaction_mode == 'tiles':
                 self.drag_event = None
 
@@ -595,6 +600,7 @@ class Presenter(Atom):
 
     def start_pan(self, event):
         self.pan_event = event
+        self.pan_performed = False
         self.pan_xlim = self.axes.get_xlim()
         self.pan_ylim = self.axes.get_ylim()
 
@@ -609,6 +615,7 @@ class Presenter(Atom):
         self.pan_ylim -= dy
         self.axes.set_xlim(self.pan_xlim)
         self.axes.set_ylim(self.pan_ylim)
+        self.pan_performed = True
         self.redraw()
 
     def end_pan(self, event):
