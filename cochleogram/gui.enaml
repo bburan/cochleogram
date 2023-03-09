@@ -34,13 +34,47 @@ def bind(figure, presenter):
     figure.canvas.mpl_connect('motion_notify_event', lambda e: presenter.motion(e))
 
 
-def add_dock_item(dock_area, presenter):
-    items = dock_area.dock_items()
-    n_items = len(items)
-    target = items[-1].name if n_items else ''
+def open_processed_dataset(window):
+    # Check for unsaved changes
+    if any(p.unsaved_changes for p in window.presenters):
+        q = 'There are unsaved changes. Your current analysis will be lost. Are you sure?'
+        button = question(None, 'Confirm action', q)
+        if button is None or button.text == 'No':
+            return
 
-    item = MPLDockItem(dock_area, name='dock_{}'.format(n_items), presenter=presenter)
+    path = FileDialogEx.get_existing_directory(window, current_path=window.current_path)
+    if path:
+        load_processed_dataset(path, window)
+
+
+def load_processed_dataset(path, window):
+    workspace = window.find('dock_area')
+    # Remove existing cochlea
+    for p in window.presenters:
+        remove_dock_item(workspace, p)
+
+    # Now, load new cochlea
+    window.current_path = path
+    window.cochlea = Cochlea.from_path(path)
+    window.presenters = [Presenter(p) for p in window.cochlea.pieces]
+    target = 'help'
+    for p in window.presenters:
+        try:
+            p.load_state()
+        except IOError:
+            pass
+        target = add_dock_item(workspace, p, target)
+
+
+def add_dock_item(dock_area, presenter, target):
+    item = MPLDockItem(dock_area, name=f'dock_piece_{presenter.piece.name}', presenter=presenter)
     op = InsertTab(item=item.name, target=target)
+    dock_area.update_layout(op)
+    return item.name
+
+
+def remove_dock_item(dock_area, presenter):
+    op = RemoveItem(item=f'dock_piece_{presenter.piece.name}')
     dock_area.update_layout(op)
 
 
@@ -57,14 +91,14 @@ def load_state(parent, presenters):
     if any(p.unsaved_changes for p in presenters):
         q = 'There are unsaved changes. Your current analysis will be lost. Are you sure?'
         button = question(parent, 'Confirm action', q)
-        if button is not None and button.text == 'No':
+        if button is None or button.text == 'No':
             return
     for presenter in presenters:
         try:
             presenter.load_state()
+            information(parent, 'Analysis loaded', 'Analysis has been loaded.')
         except Exception as e:
             information(parent, 'Error', str(e))
-    information(parent, 'Analysis loaded', 'Analysis has been loaded.')
 
 
 CELLS = ['IHC', 'OHC1', 'OHC2', 'OHC3', 'Extra']
@@ -354,6 +388,7 @@ enamldef CochleagramWindow(MainWindow): window:
 
     initial_size = (900, 900)
     title = 'Cochelogram'
+    icon = load_icon('main-icon')
 
     attr cochlea
     attr presenters = []
@@ -365,18 +400,7 @@ enamldef CochleagramWindow(MainWindow): window:
             Action:
                 text = 'Open processed dataset\tCtrl+O'
                 triggered ::
-                    path = FileDialogEx.get_existing_directory(window, current_path=window.current_path)
-                    if path:
-                        window.current_path = path
-                        from cochleogram.model import Cochlea
-                        window.cochlea = Cochlea.from_path(path)
-                        window.presenters = [Presenter(p) for p in cochlea.pieces]
-                        for p in window.presenters:
-                            try:
-                                p.load_state()
-                            except IOError:
-                                pass
-                            deferred_call(add_dock_item, workspace, p)
+                    open_processed_dataset(window)
 
             Action:
                 text = 'Process LIF file\tCtrl+P'

@@ -3,6 +3,7 @@ import configparser
 import logging
 from pathlib import Path
 
+from enaml.application import deferred_call
 from enaml.qt.QtCore import QStandardPaths
 
 from cochleogram.model import Piece
@@ -62,7 +63,7 @@ def main():
     from cochleogram.presenter import Presenter
 
     with enaml.imports():
-        from cochleogram.gui import CochleagramWindow
+        from cochleogram.gui import CochleagramWindow, load_processed_dataset
 
     parser = argparse.ArgumentParser("Cochleogram helper")
     parser.add_argument("path", nargs='?')
@@ -71,13 +72,10 @@ def main():
     app = QtApplication()
     config = get_config()
 
-    if args.path is not None:
-        presenters = [Presenter(Piece.from_path(args.path, p)) for p in list_pieces(args.path)]
-    else:
-        presenters = []
-
     current_path = config['DEFAULT']['current_path']
-    view = CochleagramWindow(presenters=presenters, current_path=current_path)
+    view = CochleagramWindow(current_path=current_path)
+    if args.path is not None:
+        deferred_call(load_processed_dataset, args.path, view)
     view.show()
     app.start()
     app.stop()
