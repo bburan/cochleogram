@@ -6,7 +6,7 @@ from enaml.icon import Icon, IconImage
 from enaml.image import Image
 from enaml.layout.api import align, hbox, InsertTab, RemoveItem, spacer, TabLayout, vbox
 from enaml.stdlib.fields import FloatField
-from enaml.stdlib.message_box import information, question
+from enaml.stdlib.message_box import critical, information, question
 from enaml.qt.QtCore import Qt
 from enaml.widgets.api import (Action, ButtonGroup, CheckBox, Container,
                                DockArea, DockItem, Feature, FileDialogEx, Form,
@@ -427,11 +427,15 @@ enamldef CochleagramWindow(MainWindow): window:
 
             Action:
                 text = 'Generate frequency map\tCtrl+F'
+                enabled << cochlea is not None
                 triggered ::
-                    fig = plot.frequency_map(cochlea)
-                    fig.suptitle(cochlea.name)
-                    fig.savefig(cochlea.path / f'{cochlea.name}_frequency_map.pdf')
-                    information(window, 'Frequency map', 'Frequency map has been generated.')
+                    try:
+                        fig = plot.frequency_map(cochlea)
+                        fig.suptitle(cochlea.name)
+                        fig.savefig(cochlea.path / f'{cochlea.name}_frequency_map.pdf')
+                        information(window, 'Frequency map', 'Frequency map has been generated.')
+                    except Exception as e:
+                        critical(window, 'Frequency map', str(e))
 
     initialized ::
         for presenter in presenters:

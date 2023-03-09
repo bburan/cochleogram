@@ -540,6 +540,8 @@ class Cochlea:
         for piece in self.pieces:
             s = piece.spirals[spiral]
             x, y = s.interpolate(resolution=0.001)
+            if len(x) == 0:
+                raise ValueError(f'Please check the {spiral} spiral on piece {piece.name} and try again.')
             x_norm = x - (x[0] - xo)
             y_norm = y - (y[0] - yo)
             xo = x_norm[-1]
