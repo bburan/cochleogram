@@ -354,6 +354,15 @@ class Presenter(Atom):
     needs_redraw = Bool(False)
     saved_state = Dict()
 
+    z_min = Property()
+    z_max = Property()
+
+    def _get_z_min(self):
+        return min(a.z_slice_min for a in self.tile_artists.values())
+
+    def _get_z_max(self):
+        return min(a.z_slice_max for a in self.tile_artists.values())
+
     def __init__(self, piece, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.piece = piece

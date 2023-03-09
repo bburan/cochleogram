@@ -187,8 +187,8 @@ enamldef MPLDockItem(DockItem):
             value << 0 if presenter.current_artist is None else presenter.current_artist.z_slice
             value ::
                 presenter.set_z_slice(value, display_apply.checked)
-            minimum << 0 if presenter.current_artist is None else presenter.current_artist.z_slice_min
-            maximum << 0 if presenter.current_artist is None else presenter.current_artist.z_slice_max
+            minimum << presenter.z_min if presenter.current_artist is None else presenter.current_artist.z_slice_min
+            maximum << presenter.z_max if presenter.current_artist is None else presenter.current_artist.z_slice_max
 
         PushButton: display_apply:
             text = 'Apply to all tiles'
