@@ -201,7 +201,7 @@ enamldef MPLDockItem(DockItem):
                 iterable = ['spiral', 'exclude', 'cells']
                 PushButton:
                     icon = load_icon(loop_item)
-                    icon_size = (30, 30)
+                    icon_size = (25, 25)
                     tool_tip = loop_item
                     enabled << (presenter.interaction_mode != 'tiles') and \
                         not (presenter.interaction_mode == 'Extra' and loop_item != 'cells')
