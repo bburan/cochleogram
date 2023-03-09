@@ -62,10 +62,10 @@ def expand_path(x, y, width):
     return x, y
 
 
-def find_nuclei(x, y, i, spacing=5):
+def find_nuclei(x, y, i, spacing=5, prominence=1):
     xy_delta = np.mean(np.sqrt(np.diff(x) ** 2 + np.diff(y) ** 2))
     distance = np.floor(spacing / xy_delta)
-    p, _ = signal.find_peaks(i, distance=distance)
+    p, _ = signal.find_peaks(i, distance=distance, prominence=prominence)
     return x[p], y[p]
 
 
@@ -76,8 +76,8 @@ def find_centroid(x, y, image, rx, ry, factor=4):
     for xi, yi in zip(x, y):
         ylb, yub = int(round(yi-ry)), int(round(yi+ry))
         xlb, xub = int(round(xi-rx)), int(round(xi+rx))
-        i = image[ylb:yub, xlb:xub].astype('int64')
-        yc, xc = ndimage.center_of_mass(i ** factor)
+        i = image[xlb:xub, ylb:yub].astype('int64')
+        xc, yc = ndimage.center_of_mass(i ** factor)
         x_center.append(xc - rx)
         y_center.append(yc - ry)
     x_center = x + np.array(x_center)
