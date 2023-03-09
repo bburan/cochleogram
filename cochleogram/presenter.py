@@ -394,7 +394,7 @@ class Presenter(Atom):
         return Figure()
 
     def _default_axes(self):
-        return self.figure.add_axes([0.05, 0.05, 0.9, 0.9])
+        return self.figure.add_axes([0, 0, 1, 1])
 
     def _observe_current_artist_index(self, event):
         if self.current_artist_index is None:
