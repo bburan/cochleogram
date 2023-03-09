@@ -281,7 +281,7 @@ enamldef MPLDockItem(DockItem):
             Label:
                 text = 'Find cells within'
             FloatField: guess_width:
-                value = 5.0
+                value = 2.5
             Label:
                 text = 'μm of spline with a spacing of'
             FloatField: guess_spacing:
