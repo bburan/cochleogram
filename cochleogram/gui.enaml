@@ -2,18 +2,27 @@ from importlib import resources
 
 from enaml.application import deferred_call
 from enaml.core.api import Looper
+from enaml.icon import Icon, IconImage
+from enaml.image import Image
 from enaml.layout.api import align, hbox, InsertTab, spacer, TabLayout, vbox
 from enaml.stdlib.fields import FloatField
 from enaml.stdlib.message_box import information, question
 from enaml.qt.QtCore import Qt
 from enaml.widgets.api import (Action, ButtonGroup, CheckBox, Container,
-                               DockArea, DockItem, FileDialogEx, Form, HGroup,
-                               Html, Label, MainWindow, Menu, MenuBar,
-                               MPLCanvas, ObjectCombo, ProgressBar,
-                               PushButton, Slider, Window)
+                               DockArea, DockItem, Feature, FileDialogEx, Form,
+                               HGroup, Html, Label, MainWindow, Menu, MenuBar,
+                               MPLCanvas, ObjectCombo, ProgressBar, PushButton,
+                               Slider, Window)
 
 from cochleogram.presenter import Presenter
 from cochleogram import plot, util
+
+
+def load_icon(name):
+    data = resources.files('cochleogram.icons').joinpath(f'{name}.png').read_bytes()
+    img = Image(data=data)
+    icg = IconImage(image=img)
+    return Icon(images=[icg])
 
 
 def bind(figure, presenter):
@@ -93,7 +102,7 @@ enamldef MPLDockItem(DockItem):
                 hbox(display_label, display_channel, display_as_label,
                      display_mode, z_slice_number_label, z_slice,
                      display_apply, highlight_selected),
-                hbox(mode_label, mode_buttons, submode_buttons, spacer),
+                hbox(mode_label, mode_buttons, spacer, submode_buttons),
                 hbox(action_label, action_clear_spiral, action_clear_cells,
                      action_simplify_exclusions, action_merge_ohc_exclusions,
                      spacer, load_analysis, save_analysis, spacing=0),
@@ -111,7 +120,6 @@ enamldef MPLDockItem(DockItem):
             align('left', display_label, mode_label, action_label),
             align('left', display_channel, mode_buttons, action_clear_spiral,
                   action_guess_cells, action_copy_exclusion),
-            submode_buttons.children[0].width == mode_buttons.children[0].width,
             guess_width.width == 50,
             guess_spacing.width == 50,
         ]
@@ -173,6 +181,7 @@ enamldef MPLDockItem(DockItem):
         HGroup: mode_buttons:
             padding = 0
             spacing = 0
+            trailing_spacer = spacer(0)
             Looper:
                 iterable = ['tiles'] + CELLS
                 PushButton:
@@ -187,12 +196,15 @@ enamldef MPLDockItem(DockItem):
         HGroup: submode_buttons:
             padding = 0
             spacing = 0
+            leading_spacer = spacer(0)
             Looper:
                 iterable = ['spiral', 'exclude', 'cells']
                 PushButton:
+                    icon = load_icon(loop_item)
+                    icon_size = (30, 30)
+                    tool_tip = loop_item
                     enabled << (presenter.interaction_mode != 'tiles') and \
                         not (presenter.interaction_mode == 'Extra' and loop_item != 'cells')
-                    text = loop_item
                     group = submode_group
                     checkable = True
                     checked << loop_item == presenter.interaction_submode
