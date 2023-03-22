@@ -405,6 +405,7 @@ class Piece:
     def from_path(cls, path, piece=None):
         path = Path(path)
         tile_filenames = sorted(path.glob(f"*piece_{piece}*.npy"))
+        log.info('Found tiles: %r', [t.stem for t in tile_filenames])
         tiles = [Tile.from_filename(f) for f in tile_filenames]
 
         # This pads the z-axis so that we have empty slices above/below stacks
@@ -528,6 +529,7 @@ class Cochlea:
 
     @classmethod
     def from_path(cls, path):
+        log.info('Loading cochlea from %s', path)
         path = Path(path)
         pieces = [Piece.from_path(path, p) for p in util.list_pieces(path)]
         return cls(pieces, path)
