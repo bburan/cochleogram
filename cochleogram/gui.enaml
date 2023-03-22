@@ -1,3 +1,6 @@
+import logging
+log = logging.getLogger(__name__)
+
 from importlib import resources
 
 from enaml.application import deferred_call
@@ -435,6 +438,7 @@ enamldef CochleagramWindow(MainWindow): window:
                         fig.savefig(cochlea.path / f'{cochlea.name}_frequency_map.pdf')
                         information(window, 'Frequency map', 'Frequency map has been generated.')
                     except Exception as e:
+                        log.exception(e)
                         critical(window, 'Frequency map', str(e))
 
     initialized ::
