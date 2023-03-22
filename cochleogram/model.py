@@ -234,6 +234,7 @@ class Tile(Atom):
     source = Typed(Path)
     extent = List()
     voxel_size = Float()
+    n_channels = Int()
 
     def __init__(self, info, image, source):
         self.info = info
@@ -249,6 +250,7 @@ class Tile(Atom):
         yub = ylb + ypx * yv
         zub = zlb + zpx * zv
         self.extent = [xlb, xub, ylb, yub, zlb, zub]
+        self.n_channels = self.image.shape[-1]
 
     def contains(self, x, y):
         contains_x = self.extent[0] <= x <= self.extent[1]
@@ -318,7 +320,7 @@ class Tile(Atom):
         for c, c_info in enumerate(self.info['channels']):
             if isinstance(channel, int):
                 raise ValueError('Must provide name for channel')
-            if channel == 'All' or c_info['name'] == channel:
+            if channel is None or channel == 'All' or c_info['name'] == channel:
                 color = c_info['display_color']
                 rgb = colors.to_rgba(color)[:3]
                 image.append(data[..., c][..., np.newaxis] * rgb)
@@ -434,7 +436,7 @@ class Piece:
         lb_pixels = np.floor(merged_lb / voxel_size).astype("i")
         ub_pixels = np.ceil(merged_ub / voxel_size).astype("i")
         extent_pixels = ub_pixels - lb_pixels
-        shape = extent_pixels.tolist() + [3]
+        shape = extent_pixels.tolist() + [self.tiles[0].n_channels]
         merged_image = np.full(shape, fill_value=0, dtype=int)
 
         for tile in self.tiles:
