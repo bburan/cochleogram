@@ -163,6 +163,15 @@ def load_lif(filename, piece, max_xy=512, dtype='uint8', reprocess=False):
         img = img[:, :, ::-1]
         voxel_size[2] = -voxel_size[2]
 
+    CHANNEL_DEFAULTS = {
+        'CtBP2': { 'display_color': 'red'},
+        'MyosinVIIa': {'display_color': 'blue'},
+        'PMT': {'display_color': 'white'},
+    }
+    channels = []
+    for c in filename.stem.split('-')[2:]:
+        channels.append({'name': c, **CHANNEL_DEFAULTS[c]})
+
     # Note that all units should be in microns since this is the most logical
     # unit for a confocal analysis.
     info = {
@@ -178,11 +187,7 @@ def load_lif(filename, piece, max_xy=512, dtype='uint8', reprocess=False):
         # implement specific tweaks for each confocal system we use.
         'system': system,
         'note': 'XY position from stage coords seem to be swapped',
-        'channels': [
-            {'name': 'CtBP2', 'display_color': 'red'},
-            {'name': 'MyosinVIIa', 'display_color': 'blue'},
-            {'name': 'PMT', 'display_color': 'white'},
-        ]
+        'channels': channels,
     }
 
     # Rescale to range 0 ... 1

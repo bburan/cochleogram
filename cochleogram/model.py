@@ -7,8 +7,10 @@ import pickle
 import re
 
 from atom.api import Atom, Dict, Event, Float, Int, List, Typed
+from matplotlib import colors
 import numpy as np
 import pandas as pd
+
 from psiaudio.util import octave_space
 from scipy import interpolate
 from scipy import ndimage
@@ -16,14 +18,6 @@ from scipy import signal
 from raster_geometry import sphere
 
 from cochleogram import util
-
-
-COLOR_SLICE = {
-    'red': np.s_[0],
-    'green': np.s_[1],
-    'blue': np.s_[2],
-    'white': np.s_[:],
-}
 
 
 class Points(Atom):
@@ -315,30 +309,23 @@ class Tile(Atom):
 
     def get_image(self, channel=None, z_slice=None):
         if z_slice is None:
-            image = self.image.max(axis=2)
+            data = self.image.max(axis=2)
         else:
-            image = self.image[:, :, z_slice, :]
-        if channel is not None and channel != 'All':
+            data = self.image[:, :, z_slice, :]
+
+        x, y = data.shape[:2]
+        image = []
+        for c, c_info in enumerate(self.info['channels']):
             if isinstance(channel, int):
-                c_info = self.info['channels'][channel]['display_color']
-                c = channel
-            else:
-                for c, c_info in enumerate(self.info['channels']):
-                    if c_info['name'] == channel:
-                        break
-                else:
-                    raise ValueError(f'Could not find channel {channel}')
-            color = c_info['display_color']
-            image_remapped = np.zeros_like(image)
-            if color == 'white':
-                # TOOD. A bit of a hack
-                image_remapped[..., :] = image[..., c][..., np.newaxis]
-            else:
-                s = COLOR_SLICE[color]
-                image_remapped[..., s] = image[..., c]
-            return image_remapped
-        else:
-            return image
+                raise ValueError('Must provide name for channel')
+            if channel == 'All' or c_info['name'] == channel:
+                color = c_info['display_color']
+                rgb = colors.to_rgba(color)[:3]
+                image.append(data[..., c][..., np.newaxis] * rgb)
+        if len(image) == 0:
+            raise ValueError(f'Channel {channel} does not exist')
+        image = np.concatenate([i[np.newaxis] for i in image]).max(axis=0)
+        return image / image.max(axis=(0, 1), keepdims=True)
 
     def get_state(self):
         return {"extent": self.extent}
