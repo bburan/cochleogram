@@ -406,7 +406,7 @@ enamldef CochleagramWindow(MainWindow): window:
                     open_processed_dataset(window)
 
             Action:
-                text = 'Process LIF file\tCtrl+P'
+                text = 'Process 20x LIF file\tCtrl+P'
                 triggered ::
                     path = FileDialogEx.get_open_file_name(window, current_path=window.current_path)
                     if path:
@@ -414,6 +414,16 @@ enamldef CochleagramWindow(MainWindow): window:
                         pp.show()
                         cb = lambda x, pp=pp: setattr(pp, 'progress', x)
                         deferred_call(util.process_lif, path, reprocess=True, cb=cb)
+
+            Action:
+                text = 'Process 63x LIF file\tCtrl+P'
+                triggered ::
+                    path = FileDialogEx.get_open_file_name(window, current_path=window.current_path)
+                    if path:
+                        pp = ProgressWindow()
+                        pp.show()
+                        cb = lambda x, pp=pp: setattr(pp, 'progress', x)
+                        deferred_call(util.lif_to_ims, path, reprocess=True, cb=cb)
 
             Action:
                 text = 'Save analysis\tCtrl+S'

@@ -3,6 +3,7 @@ import json
 import re
 from pathlib import Path
 import pickle
+import subprocess
 
 from matplotlib import path as mpath
 import numpy as np
@@ -407,3 +408,24 @@ def arc_direction(x, y):
     if np.any(sign != sign[0]):
         raise ValueError('Cannot determine direction of arc')
     return sign[0]
+
+
+def _find_ims_converter():
+    path = Path(r'C:\Program Files\Bitplane')
+    return str(next(path.glob('**/ImarisConvert.exe')))
+
+
+def lif_to_ims(filename, reprocess=False, cb=None):
+    filename = Path(filename)
+    converter = _find_ims_converter()
+    if cb is None:
+        cb = lambda x: x
+    stacks = [(i, s) for i, s in enumerate(list_lif_stacks(filename)) if s.startswith('IHC')]
+    n_stacks = len(stacks)
+    for j, (ii, stack_name) in enumerate(stacks):
+        outfile = filename.parent / filename.stem / f'{filename.stem}_{stack_name}.ims'
+        outfile.parent.mkdir(exist_ok=True, parents=True)
+        args = [converter, '-i', str(filename), '-ii', str(ii), '-o', str(outfile)]
+        subprocess.check_output(args)
+        progress = int((j + 1) / n_stacks * 100)
+        cb(progress)
