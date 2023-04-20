@@ -233,7 +233,6 @@ class Tile(Atom):
     image = Typed(np.ndarray)
     source = Typed(Path)
     extent = List()
-    voxel_size = Float()
     n_channels = Int()
 
     def __init__(self, info, image, source):
@@ -303,15 +302,20 @@ class Tile(Atom):
         template = sphere(pixel_radius * 3, pixel_radius)
         return template / template.sum()
 
-    def get_image_extent(self):
-        # This flips the x and y extents. Seems necessary to make things work
-        # for the Leica SP5.
-        #return tuple(self.extent[2:4] + self.extent[0:2])
-        return tuple(self.extent[:4])
+    def get_image_extent(self, axis='z'):
+        x = self.extent[0:2]
+        y = self.extent[2:4]
+        z = self.extent[4:6]
+        if axis == 'x':
+            return tuple(y + z)
+        if axis == 'y':
+            return tuple(x + z)
+        if axis == 'z':
+            return tuple(x + y)
 
-    def get_image(self, channel=None, z_slice=None):
+    def get_image(self, channel=None, z_slice=None, axis='z'):
         if z_slice is None:
-            data = self.image.max(axis=2)
+            data = self.image.max(axis='xyz'.index(axis))
         else:
             data = self.image[:, :, z_slice, :]
 
