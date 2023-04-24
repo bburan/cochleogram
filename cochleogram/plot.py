@@ -47,5 +47,12 @@ def frequency_map(cochlea):
     ax.set_yticks([])
 
     figure.subplots_adjust(left=0.025, right=0.975, top=0.95, bottom=0.025)
-
     return figure
+
+
+def plot_tile(ax, tile):
+    ax.imshow(tile.get_image().swapaxes(0, 1),
+              origin='lower',
+              aspect='equal',
+              transform=tile.get_image_transform() + ax.transData,
+              extent=tile.get_image_extent())
