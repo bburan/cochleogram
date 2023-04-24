@@ -348,7 +348,7 @@ class Tile(Atom):
         return tuple(center)
 
     def get_rotation(self):
-        return self.info['rotation']
+        return self.info.get('rotation', 0)
 
     def get_image(self, channel=None, z_slice=None, axis='z',
                   norm_percentile=99):
