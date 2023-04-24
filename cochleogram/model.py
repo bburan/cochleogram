@@ -576,8 +576,25 @@ class Cochlea:
         pieces = [Piece.from_path(path, p) for p in util.list_pieces(path)]
         return cls(pieces, path)
 
+    @property
+    def channel_names(self):
+        # We assume that each tile has the same set of channels
+        names = set()
+        for piece in self.pieces:
+            names.update(piece.channel_names)
+        return sorted(names)
+
+    def ihc_spiral_complete(self):
+        for piece in self.pieces:
+            s = piece.spirals['IHC']
+            x, y = s.interpolate(resolution=0.001)
+            if len(x) == 0:
+                return False
+        return True
+
     def make_frequency_map(self, freq_start=4, freq_end=64, freq_step=0.5,
-                           species='mouse', spiral='IHC'):
+                           species='mouse', spiral='IHC',
+                           include_extremes=True):
         # First, we need to merge the spirals
         xo, yo = 0, 0
         results = []
@@ -613,4 +630,10 @@ class Cochlea:
         for freq in octave_space(freq_start, freq_end, freq_step):
             idx = (results['frequency'] - freq).abs().idxmin()
             info[freq] = results.loc[idx].to_dict()
+
+        if include_extremes:
+            for ix in (0, -1):
+                row = results.iloc[ix].to_dict()
+                info[row['frequency']] = row
+
         return info

@@ -4,7 +4,7 @@ log = logging.getLogger(__name__)
 from importlib import resources
 
 from enaml.application import deferred_call
-from enaml.core.api import Looper
+from enaml.core.api import Conditional, Looper
 from enaml.icon import Icon, IconImage
 from enaml.image import Image
 from enaml.layout.api import align, hbox, InsertTab, RemoveItem, spacer, TabLayout, vbox
@@ -399,6 +399,48 @@ enamldef ProgressWindow(Window): window:
                 window.close()
 
 
+enamldef CompositeWindow(Window):
+
+    modality = 'application_modal'
+    title = 'Generate Composite'
+    attr cochlea
+    attr channels = cochlea.channel_names
+
+    Container:
+        CheckBox: include_freq_map:
+            text = 'Include frequency map?'
+            visible << cochlea.ihc_spiral_complete()
+            checked << visible
+        Label:
+            text = 'Cannot include frequency map because IHC spiral incomplete.'
+            visible << not include_freq_map.visible
+        Label:
+            text = 'Channels to include'
+        Looper:
+            iterable << cochlea.channel_names
+            CheckBox:
+                text = loop_item
+                checked = True
+                checked ::
+                    if checked:
+                        channels.append(loop_item)
+                    else:
+                        channels.remove(loop_item)
+
+        PushButton:
+            text = 'Generate'
+            enabled << len(channels) != 0
+            clicked ::
+                try:
+                    fig = plot.plot_composite(cochlea, include_freq_map=include_freq_map.checked)
+                    fig.suptitle(cochlea.name)
+                    fig.savefig(cochlea.path / f'{cochlea.name}_frequency_map.pdf')
+                    information(self, 'Composite', 'Composite has been generated.')
+                except Exception as e:
+                    log.exception(e)
+                    critical(self, 'Composite', str(e))
+
+
 enamldef CochleagramWindow(MainWindow): window:
 
     initial_size = (900, 900)
@@ -451,17 +493,11 @@ enamldef CochleagramWindow(MainWindow): window:
                 separator = True
 
             Action:
-                text = 'Generate frequency map\tCtrl+F'
+                text = 'Generate composite (frequency map)\tCtrl+F'
                 enabled << cochlea is not None
                 triggered ::
-                    try:
-                        fig = plot.frequency_map(cochlea)
-                        fig.suptitle(cochlea.name)
-                        fig.savefig(cochlea.path / f'{cochlea.name}_frequency_map.pdf')
-                        information(window, 'Frequency map', 'Frequency map has been generated.')
-                    except Exception as e:
-                        log.exception(e)
-                        critical(window, 'Frequency map', str(e))
+                    window = CompositeWindow(cochlea=cochlea)
+                    window.show()
 
     initialized ::
         for presenter in presenters:
