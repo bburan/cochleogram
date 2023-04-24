@@ -101,6 +101,7 @@ def load_state(parent, presenters):
             presenter.load_state()
             information(parent, 'Analysis loaded', 'Analysis has been loaded.')
         except Exception as e:
+            log.exception(e)
             information(parent, 'Error', str(e))
 
 
@@ -268,7 +269,11 @@ enamldef MPLDockItem(DockItem):
             clicked ::
                 button = question(self, 'Confirm action', 'Are you sure you want to remove the current cells?')
                 if button is not None and button.text == 'Yes':
-                    presenter.action_clear_cells()
+                    try:
+                        presenter.action_clear_cells()
+                    except Exception as e:
+                        log.exception(e)
+                        information(self, 'Error', str(e))
 
         PushButton: action_simplify_exclusions:
             text = 'Simplify exclusions'
@@ -280,6 +285,7 @@ enamldef MPLDockItem(DockItem):
                     try:
                         presenter.action_simplify_exclusion(presenter.cells)
                     except Exception as e:
+                        log.exception(e)
                         information(self, 'Error', str(e))
 
         PushButton: action_merge_ohc_exclusions:
@@ -299,6 +305,7 @@ enamldef MPLDockItem(DockItem):
                     try:
                         presenter.action_merge_exclusion('OHC1', 'OHC2', 'OHC3')
                     except Exception as e:
+                        log.exception(e)
                         information(self, 'Error', str(e))
 
         PushButton: load_analysis:
@@ -336,10 +343,14 @@ enamldef MPLDockItem(DockItem):
                 clicked ::
                     button = question(self, 'Confirm action', f'Are you sure you want to overwrite the existing cells?')
                     if button is not None and button.text == 'Yes':
-                        n = presenter.action_guess_cells(guess_width.value,
-                                                         guess_spacing.value,
-                                                         guess_channel.selected)
-                        information(self, 'Info', f'Found {n} cells')
+                        try:
+                            n = presenter.action_guess_cells(guess_width.value,
+                                                            guess_spacing.value,
+                                                            guess_channel.selected)
+                            information(self, 'Info', f'Found {n} cells')
+                        except Exception as e:
+                            log.exception(e)
+                            information(self, 'Error', str(e))
 
         HGroup: action_copy_exclusion:
             padding = 0
@@ -360,6 +371,7 @@ enamldef MPLDockItem(DockItem):
                         try:
                             presenter.action_copy_exclusion(copy_exclusion_to.selected)
                         except Exception as e:
+                            log.exception(e)
                             information(self, 'Error', str(e))
 
         CochleogramCanvas: canvas:
