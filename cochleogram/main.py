@@ -7,7 +7,7 @@ from enaml.application import deferred_call
 from enaml.qt.QtCore import QStandardPaths
 
 from cochleogram.model import Piece
-from cochleogram.util import list_lif_stacks, list_pieces, load_lif, load_czi
+from cochleogram.util import list_lif_stacks, list_pieces, load_lif, load_czi, process_lif
 
 
 def config_file():
@@ -52,7 +52,7 @@ def main_prepare_lif():
     parser.add_argument('--reprocess', action='store_true')
     args = parser.parse_args()
     filename = Path(args.path)
-    util.process_lif(filename, args.reprocess)
+    process_lif(filename, args.reprocess)
 
 
 def main():
