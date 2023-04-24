@@ -141,6 +141,11 @@ def load_lif(filename, piece, max_xy=512, dtype='uint8', reprocess=False):
     # This seems to work for the Z-axis.
     z_pos = float(node.find('.//DimensionDescription[@DimID="3"]').attrib['Origin'])
 
+    rot = float(node.find('.//FilterSettingRecord[@Attribute="Scan Rotation"]').attrib['Variant'])
+    rot_dir = float(node.find('.//FilterSettingRecord[@Attribute="Rotation Direction"]').attrib['Variant'])
+    if rot_dir != 1:
+        raise ValueError('Rotation direction is unexpected')
+
     system_number = node.find('.//FilterSettingRecord[@Attribute="System_Number"]').attrib['Variant']
     system_type = node.find('.//ScannerSettingRecord[@Identifier="SystemType"]').attrib['Variant']
     system = f'{system_type} {system_number}'
@@ -189,6 +194,7 @@ def load_lif(filename, piece, max_xy=512, dtype='uint8', reprocess=False):
         'system': system,
         'note': 'XY position from stage coords seem to be swapped',
         'channels': channels,
+        'rotation': rot,
     }
 
     # Rescale to range 0 ... 1

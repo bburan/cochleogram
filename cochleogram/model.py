@@ -8,6 +8,7 @@ import re
 
 from atom.api import Atom, Dict, Event, Float, Int, List, Typed
 from matplotlib import colors
+from matplotlib import transforms as T
 import numpy as np
 import pandas as pd
 
@@ -302,10 +303,14 @@ class Tile(Atom):
         template = sphere(pixel_radius * 3, pixel_radius)
         return template / template.sum()
 
-    def get_image_extent(self, axis='z'):
-        x = self.extent[0:2]
-        y = self.extent[2:4]
-        z = self.extent[4:6]
+    def get_image_extent(self, axis='z', norm=False):
+        e = np.array(self.extent).reshape((3, 2))
+        if norm:
+            e = e - e[:, [0]]
+        extent = e.ravel().tolist()
+        x = extent[0:2]
+        y = extent[2:4]
+        z = extent[4:6]
         if axis == 'x':
             return tuple(y + z)
         if axis == 'y':
@@ -313,7 +318,40 @@ class Tile(Atom):
         if axis == 'z':
             return tuple(x + y)
 
-    def get_image(self, channel=None, z_slice=None, axis='z'):
+    def get_image_transform(self):
+        return T.Affine2D().rotate_deg_around(*self.get_image_center(),
+                                              self.get_rotation())
+
+    def get_rotated_extent(self):
+        '''
+        Calculate the new extents of the tile after rotation.
+
+        This assumes that the tile is rotated using scipy.ndimage where the
+        resulting array is reshaped to ensure that the input image is contained
+        entirely in the output image.
+        '''
+        e = self.extent[:]
+        ll = e[0], e[2]
+        lr = e[1], e[2]
+        ul = e[0], e[3]
+        ur = e[1], e[3]
+        coords = np.array([ll, lr, ur, ul, ll])
+        t_coords = self.get_image_transform().transform(coords)
+        xlb, ylb = t_coords.min(axis=0)
+        xub, yub = t_coords.max(axis=0)
+        e[:4] = xlb, xub, ylb, yub
+        return e
+
+    def get_image_center(self, axis='z', norm=False):
+        extent = self.get_image_extent()
+        center = np.array(extent).reshape((2, 2)).mean(axis=1)
+        return tuple(center)
+
+    def get_rotation(self):
+        return self.info['rotation']
+
+    def get_image(self, channel=None, z_slice=None, axis='z',
+                  norm_percentile=99):
         if z_slice is None:
             data = self.image.max(axis='xyz'.index(axis))
         else:
@@ -435,30 +473,39 @@ class Piece:
         return [xmin, xmax, ymin, ymax]
 
     def merge_tiles(self):
-        merged_lb = np.vstack([t.extent[::2] for t in self.tiles]).min(axis=0)
-        merged_ub = np.vstack([t.extent[1::2] for t in self.tiles]).max(axis=0)
-        voxel_size = self.tiles[0].info["voxel_size"]
+        '''
+        Merges the information from the tiles into one single tile representing the piece
 
+        This is typically used when we need to do analyses that function across
+        the individual tiles.
+        '''
+        merged_lb = np.vstack([t.get_rotated_extent()[::2] for t in self.tiles]).min(axis=0)
+        merged_ub = np.vstack([t.get_rotated_extent()[1::2] for t in self.tiles]).max(axis=0)
+        voxel_size = self.tiles[0].info["voxel_size"]
         lb_pixels = np.floor(merged_lb / voxel_size).astype("i")
         ub_pixels = np.ceil(merged_ub / voxel_size).astype("i")
         extent_pixels = ub_pixels - lb_pixels
-        shape = extent_pixels.tolist() + [self.tiles[0].n_channels]
-        merged_image = np.full(shape, fill_value=0, dtype=int)
+        shape = [len(self.tiles)] + extent_pixels.tolist() + [self.tiles[0].n_channels]
+        merged_image = np.full(shape, fill_value=np.nan, dtype=float)
 
-        for tile in self.tiles:
-            tile_lb = tile.extent[::2]
+        for i, tile in enumerate(self.tiles):
+            img = ndimage.rotate(tile.image, tile.get_rotation(), cval=np.nan)
+            tile_lb = tile.get_rotated_extent()[::2]
             tile_lb = np.round((tile_lb - merged_lb) / voxel_size).astype("i")
-            tile_ub = tile_lb + tile.image.shape[:-1]
-            s = tuple(np.s_[lb:ub] for lb, ub in zip(tile_lb, tile_ub))
-            merged_image[s] = tile.image
+            tile_ub = tile_lb + img.shape[:-1]
+            s = tuple([i] + [np.s_[lb:ub] for lb, ub in zip(tile_lb, tile_ub)])
+            merged_image[s] = img
+
+        merged_image = np.nan_to_num(np.nanmean(merged_image, axis=0)).astype('i')
 
         info = {
             "lower": merged_lb,
             "voxel_size": voxel_size,
+            "rotation": 0,
         }
 
         t_base = self.tiles[0]
-        extra_keys = set(t_base.info.keys()) - set(('lower', 'voxel_size'))
+        extra_keys = set(t_base.info.keys()) - set(('lower', 'voxel_size', 'rotation'))
         for k in extra_keys:
             for t in self.tiles[1:]:
                 if t_base.info[k] != t.info[k]:

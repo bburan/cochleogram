@@ -30,6 +30,7 @@ from matplotlib import (
 )
 from matplotlib import patches as mpatches
 from matplotlib import path as mpath
+from matplotlib import transforms as T
 
 import numpy as np
 from scipy import interpolate
@@ -212,6 +213,8 @@ class ImagePlot(Atom):
     artist = Value()
     rectangle = Value()
     axes = Value()
+    rotation_transform = Value()
+    transform = Value()
 
     updated = Event()
     needs_redraw = Bool(False)
@@ -244,8 +247,10 @@ class ImagePlot(Atom):
         self.axes = axes
         self.axes.xaxis.set_major_locator(ticker.NullLocator())
         self.axes.yaxis.set_major_locator(ticker.NullLocator())
-        self.artist = axes.imshow(np.array([[0, 1], [0, 1]]), origin="lower")
-        self.rectangle = mp.patches.Rectangle((0, 0), 0, 0, ec='red', fc='None', zorder=5000)
+        self.rotation_transform = T.Affine2D()
+        self.transform = self.rotation_transform + axes.transData
+        self.artist = axes.imshow(np.array([[0, 1], [0, 1]]), origin="lower", transform=self.transform)
+        self.rectangle = mp.patches.Rectangle((0, 0), 0, 0, ec='red', fc='None', zorder=5000, transform=self.transform)
         self.rectangle.set_alpha(0)
         self.axes.add_patch(self.rectangle)
         self.z_slice_max = self.tile.image.shape[2] - 1
@@ -302,6 +307,9 @@ class ImagePlot(Atom):
         xlb, xub, ylb, yub = extent = self.tile.get_image_extent()[:4]
         self.artist.set_extent(extent)
         self.rectangle.set_bounds(xlb, ylb, xub-xlb, yub-ylb)
+
+        t = self.tile.get_image_transform()
+        self.rotation_transform.set_matrix(t.get_matrix())
         self.updated = True
 
     def contains(self, x, y):
