@@ -1,12 +1,7 @@
 import logging
 log = logging.getLogger(__name__)
 
-import json
-from pathlib import Path
-import pickle
-import re
-
-from atom.api import Atom, Dict, Event, Float, Int, List, Typed
+from atom.api import Atom, Dict, Event, Float, Int, List, Str, Typed
 from matplotlib import colors
 from matplotlib import transforms as T
 import numpy as np
@@ -232,7 +227,7 @@ class Tile(Atom):
 
     info = Dict()
     image = Typed(np.ndarray)
-    source = Typed(Path)
+    source = Str()
     extent = List()
     n_channels = Int()
 
@@ -256,12 +251,6 @@ class Tile(Atom):
         contains_x = self.extent[0] <= x <= self.extent[1]
         contains_y = self.extent[2] <= y <= self.extent[3]
         return contains_x and contains_y
-
-    @classmethod
-    def from_filename(cls, img_filename):
-        image = np.load(img_filename)
-        info = json.loads(img_filename.with_suffix('.json').read_text())
-        return cls(info, image, img_filename)
 
     def to_coords(self, x, y, z=None):
         lower = self.info["lower"]
@@ -420,10 +409,8 @@ class Tile(Atom):
 
 class Piece:
 
-    def __init__(self, tiles, path, piece):
+    def __init__(self, tiles, piece):
         self.tiles = tiles
-        self.path = path
-        self.name = f'{path.stem}_piece_{piece}'
         self.piece = piece
         keys = 'IHC', 'OHC1', 'OHC2', 'OHC3', 'Extra'
         self.spirals = {k: Points() for k in keys}
@@ -433,36 +420,6 @@ class Piece:
     def channel_names(self):
         # We assume that each tile has the same set of channels
         return [c['name'] for c in self.tiles[0].info['channels']]
-
-    @classmethod
-    def from_path(cls, path, piece=None):
-        path = Path(path)
-        tile_filenames = sorted(path.glob(f"*piece_{piece}*.npy"))
-        log.info('Found tiles: %r', [t.stem for t in tile_filenames])
-        tiles = [Tile.from_filename(f) for f in tile_filenames]
-
-        # This pads the z-axis so that we have empty slices above/below stacks
-        # such that they should align properly in z-space. This simplifies a
-        # few downstream operations.
-        slice_n = np.array([t.image.shape[2] for t in tiles])
-        slice_lb = np.array([t.extent[4] for t in tiles])
-        slice_ub = np.array([t.extent[5] for t in tiles])
-        slice_scale = np.array([t.info['voxel_size'][2] for t in tiles])
-
-        z_scale = slice_scale[0]
-        z_min = min(slice_lb)
-        z_max = max(slice_ub)
-        z_n = int(np.ceil((z_max - z_min) / z_scale))
-
-        pad_bottom = np.round((slice_lb - z_min) / z_scale).astype('i')
-        pad_top = (z_n - pad_bottom - slice_n).astype('i')
-
-        for (t, pb, pt) in zip(tiles, pad_bottom, pad_top):
-            padding = [(0, 0), (0, 0), (pb, pt), (0, 0)]
-            t.image = np.pad(t.image, padding)
-            t.extent[4:] = [z_min, z_max]
-
-        return cls(tiles, path, piece)
 
     def get_image_extent(self):
         extents = np.vstack([tile.get_image_extent() for tile in self.tiles])
@@ -511,11 +468,11 @@ class Piece:
                 if t_base.info[k] != t.info[k]:
                     raise ValueError(f'Cannot merge tiles. {k} differs.')
             info[k] = t_base.info[k]
-        return Tile(info, merged_image, self.path)
+        return Tile(info, merged_image, f'piece_{self.piece}_merged')
 
     def get_state(self):
         return {
-            'tiles': {t.source.stem: t.get_state() for t in self.tiles},
+            'tiles': {t.source: t.get_state() for t in self.tiles},
             'spirals': {k: v.get_state() for k, v in self.spirals.items()},
             'cells': {k: v.get_state() for k, v in self.cells.items()},
         }
@@ -526,7 +483,7 @@ class Piece:
         for k, v in self.cells.items():
             v.set_state(state['cells'][k])
         for tile in self.tiles:
-            tile.set_state(state['tiles'][tile.source.stem])
+            tile.set_state(state['tiles'][tile.source])
 
     def guess_cells(self, cell_type, width, spacing, channel):
         log.info('Finding %s assuming within %f um of spiral and spaced %f microns on channel %s',
@@ -564,17 +521,8 @@ freq_fn = {
 
 class Cochlea:
 
-    def __init__(self, pieces, path):
+    def __init__(self, pieces):
         self.pieces = pieces
-        self.path = path
-        self.name = path.stem
-
-    @classmethod
-    def from_path(cls, path):
-        log.info('Loading cochlea from %s', path)
-        path = Path(path)
-        pieces = [Piece.from_path(path, p) for p in util.list_pieces(path)]
-        return cls(pieces, path)
 
     @property
     def channel_names(self):
@@ -602,7 +550,7 @@ class Cochlea:
             s = piece.spirals[spiral]
             x, y = s.interpolate(resolution=0.001)
             if len(x) == 0:
-                raise ValueError(f'Please check the {spiral} spiral on piece {piece.name} and try again.')
+                raise ValueError(f'Please check the {spiral} spiral on piece {piece.piece} and try again.')
             x_norm = x - (x[0] - xo)
             y_norm = y - (y[0] - yo)
             xo = x_norm[-1]

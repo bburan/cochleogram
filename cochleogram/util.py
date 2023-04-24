@@ -110,19 +110,8 @@ def list_lif_stacks(filename):
     return [stack.name for stack in fh.get_iter_image()]
 
 
-def load_lif(filename, piece, max_xy=512, dtype='uint8', reprocess=False):
+def load_lif(filename, piece, max_xy=4096, dtype='uint8'):
     filename = Path(filename)
-    cache_filename = (
-        filename.parent
-        / filename.stem
-        / (filename.stem + f'_{piece}')
-    )
-    info_filename = cache_filename.with_suffix('.json')
-    img_filename = cache_filename.with_suffix('.npy')
-    if not reprocess and info_filename.exists() and img_filename.exists():
-        info = json.loads(info_filename.read_text())
-        img = np.load(img_filename)
-        return info, img
 
     from readlif.reader import LifFile
     from readlif.utilities import get_xml
@@ -154,14 +143,19 @@ def load_lif(filename, piece, max_xy=512, dtype='uint8', reprocess=False):
     voxel_size = 1 / np.array(stack.scale[:3])
     lower = np.array([x_pos, y_pos, z_pos]) * 1e6
 
-    zoom = max_xy / max(pixels[:2])
+    zoom = min(1, max_xy / max(pixels[:2]))
     voxel_size[:2] /= zoom
 
-    shape = [max_xy, max_xy, stack.dims[2], stack.channels]
+    n = min(max_xy, max(pixels[:2]))
+
+    shape = [n, n, stack.dims[2], stack.channels]
     img = np.empty(shape, dtype=np.float32)
     for c in range(stack.channels):
         for z, s in enumerate(stack.get_iter_z(c=c)):
-            img[:, :, z, c] = ndimage.zoom(s, (zoom, zoom))
+            if zoom != 1:
+                img[:, :, z, c] = ndimage.zoom(s, (zoom, zoom))
+            else:
+                img[:, :, z, c] = s
 
     # Z-step was negative. Flip stack to fix this so that we always have a
     # positive Z-step.
@@ -208,9 +202,6 @@ def load_lif(filename, piece, max_xy=512, dtype='uint8', reprocess=False):
     # should be in lower corner of screen.
     img = img.astype(dtype)[::-1].swapaxes(0, 1)
 
-    cache_filename.parent.mkdir(exist_ok=True, parents=True)
-    info_filename.write_text(json.dumps(info, indent=2))
-    np.save(img_filename, img, allow_pickle=False)
     return info, img
 
 
@@ -220,12 +211,30 @@ def process_lif(filename, reprocess, cb=None):
     if cb is None:
         cb = lambda x: x
     for p, piece in enumerate(pieces):
-        _ = load_lif(filename, piece, reprocess=reprocess)
+        # Check if already cached
+        cache_filename = (
+            filename.parent
+            / filename.stem
+            / (filename.stem + f'_{piece}')
+        )
+        info_filename = cache_filename.with_suffix('.json')
+        img_filename = cache_filename.with_suffix('.npy')
+        if cache and not reprocess and info_filename.exists() and img_filename.exists():
+            info = json.loads(info_filename.read_text())
+            img = np.load(img_filename)
+            continue
+
+        # Generate and cache
+        info, img = load_lif(filename, piece, reprocess=reprocess)
+        cache_filename.parent.mkdir(exist_ok=True, parents=True)
+        info_filename.write_text(json.dumps(info, indent=2))
+        np.save(img_filename, img, allow_pickle=False)
+
         progress = int((p + 1) / n_pieces * 100)
         cb(progress)
 
 
-def load_czi(filename, max_xy=512, dtype='uint8', reload=False):
+def load_czi(filename, max_xy=1024, dtype='uint8', reload=False):
     raise NotImplementedError
     # Note, this needs to be updated since I made some modifications to support
     # Leica LIF format and that includes changing imshow origin from lower to

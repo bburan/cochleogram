@@ -20,6 +20,7 @@ from enaml.widgets.api import (Action, ButtonGroup, CheckBox, Container,
 from cochleogram import plot, util
 from cochleogram.model import Cochlea
 from cochleogram.presenter import Presenter
+from cochleogram import reader
 
 
 def load_icon(name):
@@ -47,19 +48,34 @@ def open_processed_dataset(window):
 
     path = FileDialogEx.get_existing_directory(window, current_path=window.current_path)
     if path:
-        load_processed_dataset(path, window)
+        load_processed_dataset(path, window, reader.ProcessedReader)
 
 
-def load_processed_dataset(path, window):
+def open_20x_lif_file(window):
+    # Check for unsaved changes
+    if any(p.unsaved_changes for p in window.presenters):
+        q = 'There are unsaved changes. Your current analysis will be lost. Are you sure?'
+        button = question(None, 'Confirm action', q)
+        if button is None or button.text == 'No':
+            return
+
+    path = FileDialogEx.get_open_file_name(window, current_path=window.current_path)
+    if path:
+        print('loading')
+        load_processed_dataset(path, window, reader.LIFReader)
+
+
+def load_processed_dataset(path, window, reader_class):
     workspace = window.find('dock_area')
     # Remove existing cochlea
     for p in window.presenters:
         remove_dock_item(workspace, p)
 
+    iface = reader_class(path)
     # Now, load new cochlea
     window.current_path = path
-    window.cochlea = Cochlea.from_path(path)
-    window.presenters = [Presenter(p) for p in window.cochlea.pieces]
+    window.cochlea = iface.load_cochlea()
+    window.presenters = [Presenter(p, iface) for p in window.cochlea.pieces]
     target = 'help'
     for p in window.presenters:
         try:
@@ -70,7 +86,7 @@ def load_processed_dataset(path, window):
 
 
 def add_dock_item(dock_area, presenter, target):
-    item = MPLDockItem(dock_area, name=f'dock_piece_{presenter.piece.name}', presenter=presenter)
+    item = MPLDockItem(dock_area, name=f'dock_piece_{presenter.piece}', presenter=presenter)
     op = InsertTab(item=item.name, target=target)
     dock_area.update_layout(op)
     return item.name
@@ -455,9 +471,17 @@ enamldef CochleagramWindow(MainWindow): window:
         Menu:
             title = '&File'
             Action:
-                text = 'Open processed dataset\tCtrl+O'
+                text = 'Open processed dataset'
                 triggered ::
                     open_processed_dataset(window)
+
+            Action:
+                text = 'Open 20x LIF file'
+                triggered ::
+                    open_20x_lif_file(window)
+
+            Action:
+                separator = True
 
             Action:
                 text = 'Process 20x LIF file\tCtrl+P'

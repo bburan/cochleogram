@@ -318,6 +318,9 @@ class ImagePlot(Atom):
 
 class Presenter(Atom):
 
+    # Interface to help read data
+    reader = Value()
+
     # Tile artists
     tile_artists = Dict()
     current_artist_index = Value()
@@ -371,11 +374,12 @@ class Presenter(Atom):
     def _get_z_max(self):
         return min(a.z_slice_max for a in self.tile_artists.values())
 
-    def __init__(self, piece, *args, **kwargs):
+    def __init__(self, piece, reader, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.piece = piece
+        self.reader = reader
         self.tile_artists = {
-            t.source.name: ImagePlot(self.axes, t) for t in self.piece.tiles
+            t.source: ImagePlot(self.axes, t) for t in self.piece.tiles
         }
         for artist in self.tile_artists.values():
             artist.observe('updated', self.update)
@@ -744,17 +748,13 @@ class Presenter(Atom):
         })
 
     def save_state(self):
-        state_filename = self.piece.path / f"{self.piece.name}_analysis.json"
         state = self.get_full_state()
-        state_filename.write_text(json.dumps(state, indent=4))
+        self.reader.save_state(self.piece, state)
         self.saved_state = state
         self.update()
 
     def load_state(self):
-        state_filename = self.piece.path / f"{self.piece.name}_analysis.json"
-        if not state_filename.exists():
-            raise IOError('No saved analysis found')
-        state = json.loads(state_filename.read_text())
+        state = self.reader.load_state(self.piece)
         self.piece.set_state(state['data'])
         self.saved_state = state
         self.update()
