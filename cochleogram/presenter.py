@@ -525,10 +525,10 @@ class Presenter(Atom):
 
         elif event.key.lower() == "n":
             i = -1 if self.current_artist_index is None else self.current_artist_index
-            self.current_artist_index = int(np.clip(i + 1, 0, len(self.tile_artists) - 1))
+            self.current_artist_index = (i + 1) % len(self.tile_artists)
         elif event.key.lower() == "p":
             i = len(self.tile_artists) + 1 if self.current_artist_index is None else self.current_artist_index
-            self.current_artist_index = int(np.clip(i - 1, 0, len(self.tile_artists) - 1))
+            self.current_artist_index = (i - 1) % len(self.tile_artists)
 
     def key_press_point_plot(self, event):
         if event.key.startswith('shift+'):
