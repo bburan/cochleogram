@@ -63,8 +63,8 @@ def expand_path(x, y, width):
     return x, y
 
 
-def find_nuclei(x, y, i, spacing=5, prominence=1):
-    xy_delta = np.mean(np.sqrt(np.diff(x) ** 2 + np.diff(y) ** 2))
+def find_nuclei(x, y, i, spacing=5, prominence=None):
+    xy_delta = np.median(np.sqrt(np.diff(x) ** 2 + np.diff(y) ** 2))
     distance = np.floor(spacing / xy_delta)
     p, _ = signal.find_peaks(i, distance=distance, prominence=prominence)
     return x[p], y[p]
