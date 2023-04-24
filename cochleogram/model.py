@@ -331,7 +331,9 @@ class Tile(Atom):
         if len(image) == 0:
             raise ValueError(f'Channel {channel} does not exist')
         image = np.concatenate([i[np.newaxis] for i in image]).max(axis=0)
-        return image / image.max(axis=(0, 1), keepdims=True)
+        image_max =  np.percentile(image, norm_percentile, axis=(0, 1), keepdims=True)
+        image_mask = image_max != 0
+        return np.divide(image, image_max, where=image_mask).clip(0, 1)
 
     def get_state(self):
         return {"extent": self.extent}
