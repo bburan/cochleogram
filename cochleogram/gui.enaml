@@ -92,7 +92,7 @@ def add_dock_item(dock_area, presenter, target):
 
 
 def remove_dock_item(dock_area, presenter):
-    op = RemoveItem(item=f'dock_piece_{presenter.piece.name}')
+    op = RemoveItem(item=f'dock_piece_{presenter.piece}')
     dock_area.update_layout(op)
 
 
