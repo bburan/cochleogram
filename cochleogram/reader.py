@@ -30,7 +30,6 @@ class Reader:
 
     def load_state(self, piece):
         state_filename = self.state_filename(piece)
-        print(state_filename)
         if not state_filename.exists():
             raise IOError('No saved analysis found')
         return json.loads(state_filename.read_text())
