@@ -141,6 +141,9 @@ class Points(Atom):
 
     def remove_node(self, x, y, hit_threshold=25):
         i = self.find_node(x, y, hit_threshold)
+        log.info('Removing node %d. Origin is %d.', i, self.origin)
+        if self.origin > i:
+            self.origin -= 1
         self.x.pop(i)
         self.y.pop(i)
         self.update_exclude()
