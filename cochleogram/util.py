@@ -201,6 +201,7 @@ def load_lif(filename, piece, max_xy=4096, dtype='uint8'):
 
 
 def process_lif(filename, reprocess, cb=None):
+    filename = Path(filename)
     pieces = list_lif_stacks(filename)
     n_pieces = len(pieces)
     if cb is None:
@@ -214,13 +215,13 @@ def process_lif(filename, reprocess, cb=None):
         )
         info_filename = cache_filename.with_suffix('.json')
         img_filename = cache_filename.with_suffix('.npy')
-        if cache and not reprocess and info_filename.exists() and img_filename.exists():
+        if not reprocess and info_filename.exists() and img_filename.exists():
             info = json.loads(info_filename.read_text())
             img = np.load(img_filename)
             continue
 
         # Generate and cache
-        info, img = load_lif(filename, piece, reprocess=reprocess)
+        info, img = load_lif(filename, piece)
         cache_filename.parent.mkdir(exist_ok=True, parents=True)
         info_filename.write_text(json.dumps(info, indent=2))
         np.save(img_filename, img, allow_pickle=False)
