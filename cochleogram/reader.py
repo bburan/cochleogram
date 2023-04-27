@@ -48,7 +48,7 @@ class LIFReader(Reader):
         self.fh = LifFile(path)
 
     def list_pieces(self):
-        p_piece = re.compile('.*piece_(\d+)\w?')
+        p_piece = re.compile('^(?!_)piece_(\d+)\w?')
         pieces = {}
         for img in self.fh.get_iter_image():
             try:
