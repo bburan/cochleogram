@@ -163,14 +163,9 @@ def load_lif(filename, piece, max_xy=4096, dtype='uint8'):
         img = img[:, :, ::-1]
         voxel_size[2] = -voxel_size[2]
 
-    CHANNEL_DEFAULTS = {
-        'CtBP2': { 'display_color': 'red'},
-        'MyosinVIIa': {'display_color': 'blue'},
-        'PMT': {'display_color': 'white'},
-    }
     channels = []
     for c in filename.stem.split('-')[2:]:
-        channels.append({'name': c, **CHANNEL_DEFAULTS[c]})
+        channels.append({'name': c})
 
     # Note that all units should be in microns since this is the most logical
     # unit for a confocal analysis.

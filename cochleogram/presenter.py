@@ -202,7 +202,7 @@ class ImagePlot(Atom):
     zorder = Int(10)
 
     display_mode = Enum("projection", "slice")
-    display_channel = Enum("All", "CtBP2", "MyosinVIIa", "PMT")
+    display_channel = Str('All')
     extent = Tuple()
     z_slice = Int(0)
     z_slice_min = Int(0)

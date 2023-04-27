@@ -16,6 +16,14 @@ from raster_geometry import sphere
 from cochleogram import util
 
 
+CHANNEL_CONFIG = {
+    'CtBP2': { 'display_color': 'red'},
+    'MyosinVIIa': {'display_color': 'blue'},
+    'PMT': {'display_color': 'white'},
+    'DAPI': {'display_color': 'green'},
+}
+
+
 class Points(Atom):
 
     x = List()
@@ -355,7 +363,7 @@ class Tile(Atom):
             if isinstance(channel, int):
                 raise ValueError('Must provide name for channel')
             if channel is None or channel == 'All' or c_info['name'] == channel:
-                color = c_info['display_color']
+                color = CHANNEL_CONFIG[c_info['name']]['display_color']
                 rgb = colors.to_rgba(color)[:3]
                 image.append(data[..., c][..., np.newaxis] * rgb)
         if len(image) == 0:
