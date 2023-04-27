@@ -56,7 +56,7 @@ class LIFReader(Reader):
                 pieces.setdefault(piece, []).append(img.name)
             except Exception as e:
                 pass
-        return pieces
+        return {p: pieces[p] for p in sorted(pieces)}
 
     def _load_tile(self, stack_name):
         info, img = util.load_lif(self.path, stack_name)
