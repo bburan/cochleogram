@@ -258,6 +258,10 @@ class Tile(Atom):
         self.extent = [xlb, xub, ylb, yub, zlb, zub]
         self.n_channels = self.image.shape[-1]
 
+    @property
+    def channel_names(self):
+        return [c['name'] for c in self.info['channels']]
+
     def contains(self, x, y):
         contains_x = self.extent[0] <= x <= self.extent[1]
         contains_y = self.extent[2] <= y <= self.extent[3]
@@ -350,24 +354,32 @@ class Tile(Atom):
     def get_rotation(self):
         return self.info.get('rotation', 0)
 
-    def get_image(self, channel=None, z_slice=None, axis='z',
+    def get_image(self, channels=None, z_slice=None, axis='z',
                   norm_percentile=99):
         if z_slice is None:
             data = self.image.max(axis='xyz'.index(axis))
         else:
             data = self.image[:, :, z_slice, :]
 
+        if channels is None or channels == 'All':
+            channels = self.channel_names
+        elif isinstance(channels, int):
+            raise ValueError('Must provide name for channel')
+        elif isinstance(channels, str):
+            channels = [channels]
+        elif len(channels) == 0:
+            raise ValueError('Cannot generate image with zero channels')
+        for c in channels:
+            if c not in self.channel_names:
+                raise ValueError(f'Channel {c} does not exist')
+
         x, y = data.shape[:2]
         image = []
         for c, c_info in enumerate(self.info['channels']):
-            if isinstance(channel, int):
-                raise ValueError('Must provide name for channel')
-            if channel is None or channel == 'All' or c_info['name'] == channel:
+            if c_info['name'] in channels:
                 color = CHANNEL_CONFIG[c_info['name']]['display_color']
                 rgb = colors.to_rgba(color)[:3]
                 image.append(data[..., c][..., np.newaxis] * rgb)
-        if len(image) == 0:
-            raise ValueError(f'Channel {channel} does not exist')
         image = np.concatenate([i[np.newaxis] for i in image]).max(axis=0)
         image_max =  np.percentile(image, norm_percentile, axis=(0, 1), keepdims=True)
         image_mask = image_max != 0
@@ -430,7 +442,7 @@ class Piece:
     @property
     def channel_names(self):
         # We assume that each tile has the same set of channels
-        return [c['name'] for c in self.tiles[0].info['channels']]
+        return self.tiles[0].channel_names
 
     def get_image_extent(self):
         extents = np.vstack([tile.get_image_extent() for tile in self.tiles])

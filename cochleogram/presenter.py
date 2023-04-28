@@ -301,7 +301,7 @@ class ImagePlot(Atom):
 
     def redraw(self, event=None):
         z_slice = None if self.display_mode == 'projection' else self.z_slice
-        image = self.tile.get_image(channel=self.display_channel,
+        image = self.tile.get_image(channels=self.display_channel,
                                     z_slice=z_slice).swapaxes(0, 1)
         self.artist.set_data(image)
         xlb, xub, ylb, yub = extent = self.tile.get_image_extent()[:4]
