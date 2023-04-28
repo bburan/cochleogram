@@ -20,7 +20,7 @@ from enaml.widgets.api import (Action, ButtonGroup, CheckBox, Container,
 from cochleogram import plot, util
 from cochleogram.model import Cochlea
 from cochleogram.presenter import Presenter
-from cochleogram import reader
+from cochleogram import readers
 
 
 def load_icon(name):
@@ -48,7 +48,7 @@ def open_processed_dataset(window):
 
     path = FileDialogEx.get_existing_directory(window, current_path=window.current_path)
     if path:
-        load_processed_dataset(path, window, reader.ProcessedReader)
+        load_processed_dataset(path, window, readers.ProcessedReader)
 
 
 def open_20x_lif_file(window):
@@ -61,7 +61,7 @@ def open_20x_lif_file(window):
 
     path = FileDialogEx.get_open_file_name(window, current_path=window.current_path)
     if path:
-        load_processed_dataset(path, window, reader.LIFReader)
+        load_processed_dataset(path, window, readers.LIFReader)
 
 
 def load_processed_dataset(path, window, reader_class):
@@ -70,11 +70,12 @@ def load_processed_dataset(path, window, reader_class):
     for p in window.presenters:
         remove_dock_item(workspace, p)
 
-    iface = reader_class(path)
+    reader = reader_class(path)
     # Now, load new cochlea
     window.current_path = path
-    window.cochlea = iface.load_cochlea()
-    window.presenters = [Presenter(p, iface) for p in window.cochlea.pieces]
+    window.cochlea = reader.load_cochlea()
+    window.reader = reader
+    window.presenters = [Presenter(p, reader) for p in window.cochlea.pieces]
     target = 'help'
     for p in window.presenters:
         try:
@@ -418,6 +419,7 @@ enamldef CompositeWindow(Window):
 
     modality = 'application_modal'
     title = 'Generate Composite'
+    attr reader
     attr cochlea
     attr channels = cochlea.channel_names
 
@@ -447,9 +449,11 @@ enamldef CompositeWindow(Window):
             enabled << len(channels) != 0
             clicked ::
                 try:
-                    fig = plot.plot_composite(cochlea, include_freq_map=include_freq_map.checked)
-                    fig.suptitle(cochlea.name)
-                    fig.savefig(cochlea.path / f'{cochlea.name}_frequency_map.pdf')
+                    fig = plot.plot_composite(cochlea,
+                                              include_freq_map=include_freq_map.checked,
+                                              channels=channels)
+                    fig.suptitle(reader.get_name())
+                    reader.save_figure(fig, 'frequency_map')
                     information(self, 'Composite', 'Composite has been generated.')
                 except Exception as e:
                     log.exception(e)
@@ -462,6 +466,7 @@ enamldef CochleagramWindow(MainWindow): window:
     title = 'Cochelogram'
     icon = load_icon('main-icon')
 
+    attr reader
     attr cochlea
     attr presenters = []
     attr current_path = ''
@@ -519,7 +524,7 @@ enamldef CochleagramWindow(MainWindow): window:
                 text = 'Generate composite (frequency map)\tCtrl+F'
                 enabled << cochlea is not None
                 triggered ::
-                    window = CompositeWindow(cochlea=cochlea)
+                    window = CompositeWindow(cochlea=cochlea, reader=reader)
                     window.show()
 
     initialized ::

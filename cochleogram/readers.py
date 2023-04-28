@@ -22,7 +22,7 @@ class Reader:
     def save_analysis(self, state, piece):
         raise NotImplementedError
 
-    def load_analysis(self, piece):
+    def load_analysis(self, cochlea):
         raise NotImplementedError
 
     def state_filename(self, piece):
@@ -38,6 +38,13 @@ class Reader:
         state_filename = self.state_filename(piece)
         state_filename.parent.mkdir(exist_ok=True)
         state_filename.write_text(json.dumps(state, indent=4))
+
+    def get_name(self):
+        return self.path.stem
+
+    def save_figure(self, fig, suffix):
+        filename = self.save_path() / f'{self.get_name()}_{suffix}.pdf'
+        fig.savefig(filename)
 
 
 class LIFReader(Reader):
@@ -93,9 +100,11 @@ class LIFReader(Reader):
         pieces = [self.load_piece(p, sn) for p, sn in self.list_pieces().items()]
         return model.Cochlea(pieces)
 
+    def save_path(self):
+        return self.path.parent / self.path.stem
+
     def state_filename(self, piece):
-        return self.path.parent / self.path.stem /  \
-            f'{self.path.stem}_piece_{piece.piece}_analysis.json'
+        return self.save_path() / f'{self.path.stem}_piece_{piece.piece}_analysis.json'
 
 
 class ProcessedReader(Reader):
@@ -149,3 +158,9 @@ class ProcessedReader(Reader):
 
     def state_filename(self, piece):
         return self.path /  f'{self.path.stem}_piece_{piece.piece}_analysis.json'
+
+    def save_path(self):
+        return self.path
+
+    def state_filename(self, piece):
+        return self.save_path() / f'{self.path.stem}_piece_{piece.piece}_analysis.json'
