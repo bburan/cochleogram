@@ -35,7 +35,7 @@ from matplotlib import transforms as T
 import numpy as np
 from scipy import interpolate
 
-from cochleogram.model import Piece, Points, Tile
+from cochleogram.model import ChannelConfig, Piece, Points, Tile
 from cochleogram.util import get_region, make_plot_path, shortest_path
 
 
@@ -201,8 +201,10 @@ class ImagePlot(Atom):
     highlight = Bool(False)
     zorder = Int(10)
 
+    channel_config = Value()
+
     display_mode = Enum("projection", "slice")
-    display_channel = Str('All')
+    display_channels = List()
     extent = Tuple()
     z_slice = Int(0)
     z_slice_min = Int(0)
@@ -224,7 +226,7 @@ class ImagePlot(Atom):
             "alpha": self.alpha,
             "zorder": self.zorder,
             "display_mode": self.display_mode,
-            "display_channel": self.display_channel,
+            "display_channels": self.display_channels,
             "z_slice": self.z_slice,
             "z_slice_min": self.z_slice_min,
             "z_slice_max": self.z_slice_max,
@@ -235,7 +237,7 @@ class ImagePlot(Atom):
         self.alpha = state["alpha"]
         self.zorder = state["zorder"]
         self.display_mode = state["display_mode"]
-        self.display_channel = state["display_channel"]
+        self.display_channels = state["display_channels"]
         self.z_slice = state["z_slice"]
         self.z_slice_min = state["z_slice_min"]
         self.z_slice_max = state["z_slice_max"]
@@ -256,6 +258,11 @@ class ImagePlot(Atom):
         self.z_slice_max = self.tile.image.shape[2] - 1
         self.z_slice = self.tile.image.shape[2] // 2
         self.shift = self.tile.info["voxel_size"][0] * 5
+        self.channel_config = {c: ChannelConfig(name=c) for c in tile.channel_names}
+        for config in self.channel_config.values():
+            config.observe('visible', self.request_redraw)
+            config.observe('min_value', self.request_redraw)
+            config.observe('max_value', self.request_redraw)
         tile.observe('extent', self.request_redraw)
 
     def _observe_highlight(self, event):
@@ -289,7 +296,7 @@ class ImagePlot(Atom):
             extent[0:2] += step
         self.tile.extent = extent.tolist()
 
-    @observe("z_slice", "display_mode", "display_channel", "alpha", "highlight")
+    @observe("z_slice", "display_mode", "alpha", "highlight")
     def request_redraw(self, event=False):
         self.needs_redraw = True
         deferred_call(self.redraw_if_needed)
@@ -301,19 +308,27 @@ class ImagePlot(Atom):
 
     def redraw(self, event=None):
         z_slice = None if self.display_mode == 'projection' else self.z_slice
-        image = self.tile.get_image(channels=self.display_channel,
-                                    z_slice=z_slice).swapaxes(0, 1)
+        channels = [c for c in self.channel_config.values() if c.visible]
+        image = self.tile.get_image(channels=channels, z_slice=z_slice).swapaxes(0, 1)
         self.artist.set_data(image)
         xlb, xub, ylb, yub = extent = self.tile.get_image_extent()[:4]
         self.artist.set_extent(extent)
         self.rectangle.set_bounds(xlb, ylb, xub-xlb, yub-ylb)
-
         t = self.tile.get_image_transform()
         self.rotation_transform.set_matrix(t.get_matrix())
         self.updated = True
 
     def contains(self, x, y):
         return self.tile.contains(x, y)
+
+    def set_channel_visible(self, channel_name, visible):
+        self.channel_config[channel_name].visible = visible
+
+    def set_channel_min_value(self, channel_name, min_value):
+        self.channel_config[channel_name].min_value = min_value
+
+    def set_channel_max_value(self, channel_name, max_value):
+        self.channel_config[channel_name].max_value = max_value
 
 
 class Presenter(Atom):
@@ -383,7 +398,7 @@ class Presenter(Atom):
         }
         for artist in self.tile_artists.values():
             artist.observe('updated', self.update)
-        self.current_artist_index = None
+        self.current_artist_index = 0
         for key in ('IHC', 'OHC1', 'OHC2', 'OHC3', 'Extra'):
             cells = PointPlot(self.axes, self.piece.cells[key], name=key)
             spiral = LinePlot(self.axes, self.piece.spirals[key], name=key)
@@ -418,10 +433,7 @@ class Presenter(Atom):
         return self.figure.add_axes([0, 0, 1, 1])
 
     def _observe_current_artist_index(self, event):
-        if self.current_artist_index is None:
-            self.current_artist = None
-        else:
-            self.current_artist = list(self.tile_artists.values())[self.current_artist_index]
+        self.current_artist = list(self.tile_artists.values())[self.current_artist_index]
         self.update_highlight()
 
     @observe("highlight_selected",)
@@ -534,12 +546,11 @@ class Presenter(Atom):
         elif event.key in ["shift+right", "shift+left", "shift+up", "shift+down"]:
             if self.current_artist is not None:
                 self.current_artist.move_image(event.key.split('+')[1], 0.25)
-
         elif event.key.lower() == "n":
-            i = -1 if self.current_artist_index is None else self.current_artist_index
+            i = self.current_artist_index
             self.current_artist_index = (i + 1) % len(self.tile_artists)
         elif event.key.lower() == "p":
-            i = len(self.tile_artists) + 1 if self.current_artist_index is None else self.current_artist_index
+            i = len(self.tile_artists) + 1
             self.current_artist_index = (i - 1) % len(self.tile_artists)
 
     def key_press_point_plot(self, event):
@@ -572,8 +583,6 @@ class Presenter(Atom):
                 if artist.contains(event.xdata, event.ydata):
                     self.current_artist_index = i
                     break
-            else:
-                self.current_artist_index = None
 
     def button_press_point_plot(self, event):
         if event.button != MouseButton.RIGHT:
@@ -710,12 +719,26 @@ class Presenter(Atom):
         elif self.current_artist is not None:
             self.current_artist.display_mode = display_mode
 
-    def set_display_channel(self, display_channel, all_tiles=False):
+    def set_channel_visible(self, channel_name, visible, all_tiles=False):
         if all_tiles:
             for artist in self.tile_artists.values():
-                artist.display_channel = display_channel
+                artist.set_channel_visible(channel_name, visible)
         elif self.current_artist is not None:
-            self.current_artist.display_channel = display_channel
+            self.current_artist.set_channel_visible(channel_name, visible)
+
+    def set_channel_min_value(self, channel_name, low_value, all_tiles=False):
+        if all_tiles:
+            for artist in self.tile_artists.values():
+                artist.set_channel_min_value(channel_name, low_value)
+        elif self.current_artist is not None:
+            self.current_artist.set_channel_min_value(channel_name, low_value)
+
+    def set_channel_max_value(self, channel_name, high_value, all_tiles=False):
+        if all_tiles:
+            for artist in self.tile_artists.values():
+                artist.set_channel_max_value(channel_name, high_value)
+        elif self.current_artist is not None:
+            self.current_artist.set_channel_max_value(channel_name, high_value)
 
     def set_z_slice(self, z_slice, all_tiles=False):
         if all_tiles:

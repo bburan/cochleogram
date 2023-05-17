@@ -1,7 +1,7 @@
 import logging
 log = logging.getLogger(__name__)
 
-from atom.api import Atom, Dict, Event, Float, Int, List, Str, Typed
+from atom.api import Atom, Bool, Dict, Event, Float, Int, List, Str, Typed
 from matplotlib import colors
 from matplotlib import transforms as T
 import numpy as np
@@ -20,8 +20,16 @@ CHANNEL_CONFIG = {
     'CtBP2': { 'display_color': 'red'},
     'MyosinVIIa': {'display_color': 'blue'},
     'PMT': {'display_color': 'white'},
-    'DAPI': {'display_color': 'green'},
+    'DAPI': {'display_color': 'white'},
 }
+
+
+class ChannelConfig(Atom):
+
+    name = Str()
+    min_value = Float(0)
+    max_value = Float(1)
+    visible = Bool(True)
 
 
 class Points(Atom):
@@ -360,30 +368,63 @@ class Tile(Atom):
             data = self.image.max(axis='xyz'.index(axis))
         else:
             data = self.image[:, :, z_slice, :]
+        x, y = data.shape[:2]
 
-        if channels is None or channels == 'All':
+        # Normalize data
+        data_max =  np.percentile(data, norm_percentile, axis=(0, 1), keepdims=True)
+        data_mask = data_max != 0
+        data = np.divide(data, data_max, where=data_mask).clip(0, 1)
+
+        if channels is None:
             channels = self.channel_names
         elif isinstance(channels, int):
             raise ValueError('Must provide name for channel')
         elif isinstance(channels, str):
             channels = [channels]
         elif len(channels) == 0:
-            raise ValueError('Cannot generate image with zero channels')
-        for c in channels:
-            if c not in self.channel_names:
-                raise ValueError(f'Channel {c} does not exist')
+            #raise ValueError('Cannot generate image with zero channels')
+            return np.zeros((x, y))
 
-        x, y = data.shape[:2]
+        # Check that channels are valid and generate config
+        channel_config = {}
+        for c in channels:
+            if isinstance(c, ChannelConfig):
+                if not c.visible:
+                    continue
+                if c.name not in self.channel_names:
+                    raise ValueError(f'Channel {c.name} does not exist')
+                channel_config[c.name] = {
+                    'min_value': c.min_value,
+                    'max_value': c.max_value,
+                    **CHANNEL_CONFIG[c.name],
+                }
+            elif isinstance(c, dict):
+                channel_config[c['name']] = {
+                    **c,
+                    **CHANNEL_CONFIG[c['name']],
+                }
+            elif c not in self.channel_names:
+                raise ValueError(f'Channel {c} does not exist')
+            else:
+                channel_config[c] = {
+                    'min_value': 0,
+                    'max_value': 1,
+                    **CHANNEL_CONFIG[c],
+                }
+
         image = []
         for c, c_info in enumerate(self.info['channels']):
-            if c_info['name'] in channels:
-                color = CHANNEL_CONFIG[c_info['name']]['display_color']
-                rgb = colors.to_rgba(color)[:3]
-                image.append(data[..., c][..., np.newaxis] * rgb)
-        image = np.concatenate([i[np.newaxis] for i in image]).max(axis=0)
-        image_max =  np.percentile(image, norm_percentile, axis=(0, 1), keepdims=True)
-        image_mask = image_max != 0
-        return np.divide(image, image_max, where=image_mask).clip(0, 1)
+            if c_info['name'] in channel_config:
+                config = channel_config[c_info['name']]
+                rgb = colors.to_rgba(config['display_color'])[:3]
+
+                lb = config['min_value']
+                ub = config['max_value']
+                d = np.clip((data[..., c] - lb) / (ub - lb), 0, 1)
+                d = d[..., np.newaxis] * rgb
+                image.append(d)
+
+        return np.concatenate([i[np.newaxis] for i in image]).max(axis=0)
 
     def get_state(self):
         return {"extent": self.extent}

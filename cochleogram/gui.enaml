@@ -2,6 +2,7 @@ import logging
 log = logging.getLogger(__name__)
 
 from importlib import resources
+from pathlib import Path
 
 from enaml.application import deferred_call
 from enaml.core.api import Conditional, Looper
@@ -12,10 +13,11 @@ from enaml.stdlib.fields import FloatField
 from enaml.stdlib.message_box import critical, information, question
 from enaml.qt.QtCore import Qt
 from enaml.widgets.api import (Action, ButtonGroup, CheckBox, Container,
-                               DockArea, DockItem, Feature, FileDialogEx, Form,
-                               HGroup, Html, Label, MainWindow, Menu, MenuBar,
-                               MPLCanvas, ObjectCombo, ProgressBar, PushButton,
-                               Slider, Window)
+                               DockArea, DockItem, DualSlider, Feature,
+                               FileDialogEx, Form, HGroup, Html, Label,
+                               MainWindow, Menu, MenuBar, MPLCanvas,
+                               ObjectCombo, ProgressBar, PushButton, Slider,
+                               VGroup, Window)
 
 from cochleogram import plot, util
 from cochleogram.model import Cochlea
@@ -156,7 +158,8 @@ enamldef MPLDockItem(DockItem):
     Container: container:
         constraints = [
             vbox(
-                hbox(display_label, display_channel, display_as_label,
+                channel_config,
+                hbox(display_label, display_as_label,
                      display_mode, z_slice_number_label, z_slice,
                      display_apply, highlight_selected),
                 hbox(tool_label, mode_buttons, spacer, load_analysis, save_analysis),
@@ -167,7 +170,7 @@ enamldef MPLDockItem(DockItem):
                 action_copy_exclusion,
                 canvas,
             ),
-            align('v_center', display_label, display_channel, display_as_label,
+            align('v_center', display_label, display_as_label,
                   display_mode, z_slice_number_label, z_slice, display_apply,
                   highlight_selected),
             align('v_center', tool_label, mode_buttons),
@@ -175,7 +178,7 @@ enamldef MPLDockItem(DockItem):
                   action_clear_cells, action_simplify_exclusions,
                   action_merge_ohc_exclusions),
             align('left', display_label, tool_label, action_label),
-            align('left', display_channel, mode_buttons, action_clear_spiral,
+            align('left', mode_buttons, action_clear_spiral,
                   action_guess_cells, action_copy_exclusion),
             guess_width.width == 50,
             guess_spacing.width == 50,
@@ -184,11 +187,34 @@ enamldef MPLDockItem(DockItem):
         Label: display_label:
             text = 'Display'
 
-        ObjectCombo: display_channel:
-            items = ['All'] + presenter.piece.channel_names
-            selected << 'All' if presenter.current_artist is None else presenter.current_artist.display_channel
-            selected ::
-                presenter.set_display_channel(selected, display_apply.checked)
+        Container: channel_config:
+            layout_constraints => ():
+                widgets = self.visible_widgets()
+                cb = widgets[::2]
+                slider = widgets[1::2]
+                constraints = [vbox(*[hbox(c, s) for c, s in zip(cb, slider)])]
+                constraints.append(align('left', *slider))
+                constraints.append(align('left', *cb))
+                return constraints
+
+            Looper:
+                iterable << presenter.current_artist.channel_config.items() \
+                    if presenter.current_artist is not None else {}
+
+                CheckBox:
+                    text = loop_item[0]
+                    checked << loop_item[1].visible
+                    checked ::
+                        presenter.set_channel_visible(loop_item[0], checked, display_apply.checked)
+                DualSlider:
+                    minimum = 0
+                    maximum = 100
+                    low_value << int(loop_item[1].min_value * 100)
+                    high_value << int(loop_item[1].max_value * 100)
+                    low_value ::
+                        presenter.set_channel_min_value(loop_item[0], low_value / 100, display_apply.checked)
+                    high_value ::
+                        presenter.set_channel_max_value(loop_item[0], high_value / 100, display_apply.checked)
 
         Label: display_as_label:
             text = 'as'
@@ -219,7 +245,6 @@ enamldef MPLDockItem(DockItem):
             clicked ::
                 if checked:
                     presenter.set_display_mode(display_mode.selected, True)
-                    presenter.set_display_channel(display_channel.selected, True)
 
         PushButton: highlight_selected:
             text = 'Highlight selected'
