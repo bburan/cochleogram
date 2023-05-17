@@ -518,7 +518,7 @@ class Piece:
 
         # Map to centroid
         xni, yni = tile.to_indices(xn, yn)
-        image = tile.get_image(channel=channel).max(axis=-1)
+        image = tile.get_image(channel).max(axis=-1)
         x_radius = tile.to_indices_delta(width, 'x')
         y_radius = tile.to_indices_delta(width, 'y')
         log.info('Searching for centroid within %ix%i pixels of spiral', x_radius,
