@@ -50,7 +50,7 @@ def open_processed_dataset(window):
 
     path = FileDialogEx.get_existing_directory(window, current_path=window.current_path)
     if path:
-        load_processed_dataset(path, window, readers.ProcessedReader)
+        load_dataset(path, window, readers.ProcessedReader)
 
 
 def open_20x_lif_file(window):
@@ -63,10 +63,19 @@ def open_20x_lif_file(window):
 
     path = FileDialogEx.get_open_file_name(window, current_path=window.current_path)
     if path:
-        load_processed_dataset(path, window, readers.LIFReader)
+        load_dataset(path, window, readers.LIFReader)
 
 
-def load_processed_dataset(path, window, reader_class):
+def load_dataset(path, window, reader_class=None):
+    path = Path(path)
+    if reader_class is None:
+        if path.is_dir():
+            reader_class = readers.ProcessedReader
+        elif path.suffix.lower() == '.lif':
+            reader_class = readers.LIFReader
+        else:
+            raise ValueError(f'Unrecognized format for {path}')
+
     # First, make sure we can load the cochlea
     reader = reader_class(path)
     window.cochlea = reader.load_cochlea()
