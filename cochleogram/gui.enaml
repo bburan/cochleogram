@@ -65,15 +65,17 @@ def open_20x_lif_file(window):
 
 
 def load_processed_dataset(path, window, reader_class):
-    workspace = window.find('dock_area')
+    # First, make sure we can load the cochlea
+    reader = reader_class(path)
+    window.cochlea = reader.load_cochlea()
+
     # Remove existing cochlea
+    workspace = window.find('dock_area')
     for p in window.presenters:
         remove_dock_item(workspace, p)
 
-    reader = reader_class(path)
     # Now, load new cochlea
     window.current_path = path
-    window.cochlea = reader.load_cochlea()
     window.reader = reader
     window.presenters = [Presenter(p, reader) for p in window.cochlea.pieces]
     target = 'help'
@@ -454,10 +456,10 @@ enamldef CompositeWindow(Window):
                                               channels=channels)
                     fig.suptitle(reader.get_name())
                     reader.save_figure(fig, 'frequency_map')
-                    information(self, 'Composite', 'Composite has been generated.')
+                    information(self, 'Plotting', 'Composite has been generated.')
                 except Exception as e:
                     log.exception(e)
-                    critical(self, 'Composite', str(e))
+                    critical(self, 'Plotting', str(e))
 
 
 enamldef CochleagramWindow(MainWindow): window:
@@ -477,12 +479,20 @@ enamldef CochleagramWindow(MainWindow): window:
             Action:
                 text = 'Open processed dataset'
                 triggered ::
-                    open_processed_dataset(window)
+                    try:
+                        open_processed_dataset(window)
+                    except IOError as e:
+                        log.exception(e)
+                        critical(window, 'Load', str(e))
 
             Action:
                 text = 'Open 20x LIF file'
                 triggered ::
-                    open_20x_lif_file(window)
+                    try:
+                        open_20x_lif_file(window)
+                    except IOError as e:
+                        log.exception(e)
+                        critical(window, 'Load', str(e))
 
             Action:
                 separator = True

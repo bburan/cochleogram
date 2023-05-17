@@ -98,6 +98,8 @@ class LIFReader(Reader):
 
     def load_cochlea(self):
         pieces = [self.load_piece(p, sn) for p, sn in self.list_pieces().items()]
+        if len(pieces) == 0:
+            raise IOError(f'No pieces found in {self.path}')
         return model.Cochlea(pieces)
 
     def save_path(self):
@@ -154,6 +156,8 @@ class ProcessedReader(Reader):
 
     def load_cochlea(self):
         pieces = [self.load_piece(p) for p in self.list_pieces()]
+        if len(pieces) == 0:
+            raise IOError(f'No pieces found in {self.path}')
         return model.Cochlea(pieces)
 
     def state_filename(self, piece):
