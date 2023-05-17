@@ -445,7 +445,13 @@ class Piece:
         return self.tiles[0].channel_names
 
     def get_image_extent(self):
-        extents = np.vstack([tile.get_image_extent() for tile in self.tiles])
+        return self._get_extent(lambda t: t.get_image_extent())
+
+    def get_rotated_extent(self):
+        return self._get_extent(lambda t: t.get_rotated_extent())
+
+    def _get_extent(self, cb):
+        extents = np.vstack([cb(tile) for tile in self.tiles])
         xmin = extents[:, 0].min()
         xmax = extents[:, 1].max()
         ymin = extents[:, 2].min()
@@ -554,6 +560,20 @@ class Cochlea:
         for piece in self.pieces:
             names.update(piece.channel_names)
         return sorted(names)
+
+    def get_image_extent(self):
+        return self._get_extent(lambda p: p.get_image_extent())
+
+    def get_rotated_extent(self):
+        return self._get_extent(lambda p: p.get_rotated_extent())
+
+    def _get_extent(self, cb):
+        extents = np.vstack([cb(piece) for piece in self.pieces])
+        xmin = extents[:, 0].min()
+        xmax = extents[:, 1].max()
+        ymin = extents[:, 2].min()
+        ymax = extents[:, 3].max()
+        return [xmin, xmax, ymin, ymax]
 
     def ihc_spiral_complete(self):
         for piece in self.pieces:

@@ -69,6 +69,19 @@ def plot_composite(cochlea, include_freq_map=True, cells=None, channels=None):
     return figure
 
 
+def plot_slide_layout(cochlea):
+    figure, ax = plt.subplots(1, 1)
+    for piece in cochlea.pieces:
+        for tile in piece.tiles:
+            plot_tile(ax, tile)
+    e = cochlea.get_rotated_extent()
+    ax.axis(e)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_facecolor('k')
+    return figure
+
+
 def plot_tile(ax, tile):
     ax.imshow(tile.get_image().swapaxes(0, 1),
               origin='lower',

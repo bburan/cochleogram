@@ -527,6 +527,20 @@ enamldef CochleagramWindow(MainWindow): window:
                     window = CompositeWindow(cochlea=cochlea, reader=reader)
                     window.show()
 
+            Action:
+                text = 'Generate slide map'
+                enabled << cochlea is not None
+                triggered ::
+                    try:
+                        fig = plot.plot_slide_layout(cochlea)
+                        fig.suptitle(reader.get_name())
+                        reader.save_figure(fig, 'slide_map')
+                        information(window, 'Plotting', 'Slide map has been generated.')
+                    except Exception as e:
+                        log.exception(e)
+                        critical(window, 'Plotting', str(e))
+
+
     initialized ::
         for presenter in presenters:
             deferred_call(add_dock_item, workspace, presenter)
