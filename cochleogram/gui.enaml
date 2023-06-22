@@ -16,8 +16,8 @@ from enaml.widgets.api import (Action, ButtonGroup, CheckBox, Container,
                                DockArea, DockItem, DualSlider, Feature,
                                FileDialogEx, Form, HGroup, Html, Label,
                                MainWindow, Menu, MenuBar, MPLCanvas,
-                               ObjectCombo, ProgressBar, PushButton, Slider,
-                               VGroup, Window)
+                               ObjectCombo, PopupView, ProgressBar, PushButton,
+                               Slider, VGroup, Window)
 
 from cochleogram import plot, util
 from cochleogram.model import Cochlea
@@ -153,7 +153,45 @@ def bind_focus(items, cb):
             bind_focus(item.children, cb)
 
 
-enamldef MPLDockItem(DockItem):
+enamldef ChannelConfigPopup(PopupView):
+    attr presenter
+    attr display_apply
+
+    anchor = (0.5, 0.0)
+    parent_anchor = (0.5, 1.0)
+    arrow_size = 20
+
+    Container:
+        layout_constraints => ():
+            widgets = self.visible_widgets()
+            cb = widgets[::2]
+            slider = widgets[1::2]
+            constraints = [vbox(*[hbox(c, s) for c, s in zip(cb, slider)])]
+            constraints.append(align('left', *slider))
+            constraints.append(align('left', *cb))
+            return constraints
+
+        Looper:
+            iterable << presenter.current_artist.channel_config.items() \
+                if presenter.current_artist is not None else {}
+
+            CheckBox:
+                text = loop_item[0]
+                checked << loop_item[1].visible
+                checked ::
+                    presenter.set_channel_visible(loop_item[0], checked, display_apply)
+            DualSlider:
+                minimum = 0
+                maximum = 100
+                low_value << int(loop_item[1].min_value * 100)
+                high_value << int(loop_item[1].max_value * 100)
+                low_value ::
+                    presenter.set_channel_min_value(loop_item[0], low_value / 100, display_apply)
+                high_value ::
+                    presenter.set_channel_max_value(loop_item[0], high_value / 100, display_apply)
+
+
+enamldef MPLDockItem(DockItem): dock_item:
 
     attr presenter
     closable = False
@@ -167,10 +205,9 @@ enamldef MPLDockItem(DockItem):
     Container: container:
         constraints = [
             vbox(
-                channel_config,
-                hbox(display_label, display_as_label,
-                     display_mode, z_slice_number_label, z_slice,
-                     display_apply, highlight_selected),
+                hbox(display_label, channels, display_as_label, display_mode,
+                     z_slice_number_label, z_slice, display_apply,
+                     highlight_selected),
                 hbox(tool_label, mode_buttons, spacer, load_analysis, save_analysis),
                 hbox(action_label, action_clear_spiral, action_clear_cells,
                      action_simplify_exclusions, action_merge_ohc_exclusions,
@@ -179,7 +216,7 @@ enamldef MPLDockItem(DockItem):
                 action_copy_exclusion,
                 canvas,
             ),
-            align('v_center', display_label, display_as_label,
+            align('v_center', display_label, channels, display_as_label,
                   display_mode, z_slice_number_label, z_slice, display_apply,
                   highlight_selected),
             align('v_center', tool_label, mode_buttons),
@@ -196,34 +233,12 @@ enamldef MPLDockItem(DockItem):
         Label: display_label:
             text = 'Display'
 
-        Container: channel_config:
-            layout_constraints => ():
-                widgets = self.visible_widgets()
-                cb = widgets[::2]
-                slider = widgets[1::2]
-                constraints = [vbox(*[hbox(c, s) for c, s in zip(cb, slider)])]
-                constraints.append(align('left', *slider))
-                constraints.append(align('left', *cb))
-                return constraints
-
-            Looper:
-                iterable << presenter.current_artist.channel_config.items() \
-                    if presenter.current_artist is not None else {}
-
-                CheckBox:
-                    text = loop_item[0]
-                    checked << loop_item[1].visible
-                    checked ::
-                        presenter.set_channel_visible(loop_item[0], checked, display_apply.checked)
-                DualSlider:
-                    minimum = 0
-                    maximum = 100
-                    low_value << int(loop_item[1].min_value * 100)
-                    high_value << int(loop_item[1].max_value * 100)
-                    low_value ::
-                        presenter.set_channel_min_value(loop_item[0], low_value / 100, display_apply.checked)
-                    high_value ::
-                        presenter.set_channel_max_value(loop_item[0], high_value / 100, display_apply.checked)
+        PushButton: channels:
+            text = 'Channels'
+            clicked ::
+                popup = ChannelConfigPopup(self, presenter=dock_item.presenter,
+                                           display_apply=display_apply.checked)
+                popup.show()
 
         Label: display_as_label:
             text = 'as'
