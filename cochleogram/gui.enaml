@@ -48,7 +48,7 @@ def open_processed_dataset(window):
         if button is None or button.text == 'No':
             return
 
-    path = FileDialogEx.get_existing_directory(window, current_path=window.current_path)
+    path = FileDialogEx.get_existing_directory(window, current_path=str(window.current_path))
     if path:
         load_dataset(path, window, readers.ProcessedReader)
 
@@ -61,7 +61,7 @@ def open_20x_lif_file(window):
         if button is None or button.text == 'No':
             return
 
-    path = FileDialogEx.get_open_file_name(window, current_path=window.current_path)
+    path = FileDialogEx.get_open_file_name(window, current_path=str(window.current_path))
     if path:
         load_dataset(path, window, readers.LIFReader)
 
@@ -534,7 +534,7 @@ enamldef CochleagramWindow(MainWindow): window:
             Action:
                 text = 'Process 20x LIF file\tCtrl+P'
                 triggered ::
-                    path = FileDialogEx.get_open_file_name(window, current_path=window.current_path)
+                    path = FileDialogEx.get_open_file_name(window, current_path=str(window.current_path))
                     if path:
                         pp = ProgressWindow()
                         pp.show()
@@ -544,7 +544,7 @@ enamldef CochleagramWindow(MainWindow): window:
             Action:
                 text = 'Process 63x LIF file\tCtrl+P'
                 triggered ::
-                    path = FileDialogEx.get_open_file_name(window, current_path=window.current_path)
+                    path = FileDialogEx.get_open_file_name(window, current_path=str(window.current_path))
                     if path:
                         pp = ProgressWindow()
                         pp.show()
