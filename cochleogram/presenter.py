@@ -612,6 +612,13 @@ class Presenter(Atom):
                 else:
                     self.end_drag_exclude(event, keep=True)
 
+    @observe('tool', 'cells')
+    def _reset_drag(self, event):
+        self.drag_event = None
+        if self.current_spiral_artist is not None:
+            self.current_spiral_artist.start_drag = None
+            self.current_spiral_artist.end_drag = None
+
     def button_release(self, event):
         if event.button == MouseButton.LEFT:
             if not self.pan_performed:
