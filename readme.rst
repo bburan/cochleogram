@@ -28,11 +28,11 @@ example:
 Inside each file, the pieces must be numbered sequentially from base (hook) to
 apex. If more htan one image is required for a piece, use letters for the
 suffixes (i.e., "piece2a", "piece2b", etc.). The order in which the images for
-a single piece are labeled does nto matter since the program will automatically
+a single piece are labeled does not matter since the program will automatically
 align them based on the stage coordinates stored in the file.
 
-We currently do not have support for missing pieces. This will be added
-shortly.
+We currently do not have support for missing pieces. This will be added once
+the need arises.
 
 Using the program
 -----------------
@@ -96,18 +96,16 @@ a large number of hair cells).
 
 **Tile mode**
 
-Start by selecting "tiles" from the edit buttons, then left-clicking to select the tile that is
-misaligned. Using the arrow keys, you can move the tile until it is properly
-aligned with the other tiles. If you need to move the tile in smaller steps,
-hold down the shift key at the same time as the arrow keys. It may be helpful
-to toggle "highlight selected" so that you get a transparent overlay. When in
-"highlight selected" mode, the currently selected tile will be shown with a red
-border.
+Start by selecting "tiles" from the edit buttons, then left-clicking to select
+the tile that is misaligned. Using the arrow keys, you can move the tile until
+it is properly aligned with the other tiles. If you need to move the tile in
+smaller steps, hold down the shift key at the same time as the arrow keys. It
+may be helpful to toggle "highlight selected" so that you get a transparent
+overlay. When in "highlight selected" mode, the currently selected tile will be
+shown with a red border.
 
 left click
     Select tile
-left click + drag
-    Pan image
 mouse wheel
     Zoom in/out
 arrow keys
@@ -143,7 +141,7 @@ right click
     Add point
 shift + right click
     Remove point
-contrl + right click
+control + right click
     Set point as origin for spiral
 
 **Cell mode**
@@ -160,9 +158,9 @@ shift + right click
     Remove cell
 
 From time to time there will be a fourth row of OHCs. These should manually be
-identified by selecting "extra" from the edit mode and then selecting the cell
-tool. Since the fourth row tends to be very short in length, you cannot mark
-a spiral or mark the region as excluded.
+identified by selecting "extra" for the cell you would like to edit and then
+adding the cells using the cell tool.  Since the fourth row tends to be very
+short in length, you cannot mark a spiral or mark the region as excluded.
 
 **Exclude mode**
 
@@ -173,16 +171,16 @@ region you wish to exclude.
 
 right click
     Start region. Click again to end region.
-alt + rigth click
-    Remove region.
+shift + right click
+    Remove region under mouse cursor.
 escape
     Cancel current region.
 
 Some additional tools are made available to facilitate this process:
 
-* You can copy a set of excluded regions to any other spiral.
 * You can merge all excluded regions across the OHC spirals into a single set
-  of excluded regions that apply to all OHC spirals.</li>
+  of excluded regions that apply to all OHC spirals (`Combine OHC exclusions`
+  button).
 * You can simplify a set of excluded regions for a particular spiral if they
   are overlapping (this will combine overlapping exclusion regions into
-  a single exclusion region).
+  a single exclusion region) using the `Simplify exclusions` button.

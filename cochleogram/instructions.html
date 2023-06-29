@@ -629,10 +629,10 @@ example:</p>
 <p>Inside each file, the pieces must be numbered sequentially from base (hook) to
 apex. If more htan one image is required for a piece, use letters for the
 suffixes (i.e., &quot;piece2a&quot;, &quot;piece2b&quot;, etc.). The order in which the images for
-a single piece are labeled does nto matter since the program will automatically
+a single piece are labeled does not matter since the program will automatically
 align them based on the stage coordinates stored in the file.</p>
-<p>We currently do not have support for missing pieces. This will be added
-shortly.</p>
+<p>We currently do not have support for missing pieces. This will be added once
+the need arises.</p>
 </section>
 </section>
 <section id="using-the-program">
@@ -712,19 +712,16 @@ go back and edit a previous step, it may affect your analysis (e.g., if you
 need to move a tile after marking hair cells, you may have to manually edit
 a large number of hair cells).</p>
 <p><strong>Tile mode</strong></p>
-<p>Start by selecting &quot;tiles&quot; from the edit buttons, then left-clicking to select the tile that is
-misaligned. Using the arrow keys, you can move the tile until it is properly
-aligned with the other tiles. If you need to move the tile in smaller steps,
-hold down the shift key at the same time as the arrow keys. It may be helpful
-to toggle &quot;highlight selected&quot; so that you get a transparent overlay. When in
-&quot;highlight selected&quot; mode, the currently selected tile will be shown with a red
-border.</p>
+<p>Start by selecting &quot;tiles&quot; from the edit buttons, then left-clicking to select
+the tile that is misaligned. Using the arrow keys, you can move the tile until
+it is properly aligned with the other tiles. If you need to move the tile in
+smaller steps, hold down the shift key at the same time as the arrow keys. It
+may be helpful to toggle &quot;highlight selected&quot; so that you get a transparent
+overlay. When in &quot;highlight selected&quot; mode, the currently selected tile will be
+shown with a red border.</p>
 <dl class="simple">
 <dt>left click</dt>
 <dd><p>Select tile</p>
-</dd>
-<dt>left click + drag</dt>
-<dd><p>Pan image</p>
 </dd>
 <dt>mouse wheel</dt>
 <dd><p>Zoom in/out</p>
@@ -765,7 +762,7 @@ semi-automated algorithms implemented by the program to help mark hair cells.</p
 <dt>shift + right click</dt>
 <dd><p>Remove point</p>
 </dd>
-<dt>contrl + right click</dt>
+<dt>control + right click</dt>
 <dd><p>Set point as origin for spiral</p>
 </dd>
 </dl>
@@ -784,9 +781,9 @@ add cells and shift + left click to delete cells.</p>
 </dd>
 </dl>
 <p>From time to time there will be a fourth row of OHCs. These should manually be
-identified by selecting &quot;extra&quot; from the edit mode and then selecting the cell
-tool. Since the fourth row tends to be very short in length, you cannot mark
-a spiral or mark the region as excluded.</p>
+identified by selecting &quot;extra&quot; for the cell you would like to edit and then
+adding the cells using the cell tool.  Since the fourth row tends to be very
+short in length, you cannot mark a spiral or mark the region as excluded.</p>
 <p><strong>Exclude mode</strong></p>
 <p>Finally, go back through each row of hair cells. If there was a region you felt
 you could not intepret properly, select the exclude tool. Right-click the
@@ -796,8 +793,8 @@ region you wish to exclude.</p>
 <dt>right click</dt>
 <dd><p>Start region. Click again to end region.</p>
 </dd>
-<dt>alt + rigth click</dt>
-<dd><p>Remove region.</p>
+<dt>shift + right click</dt>
+<dd><p>Remove region under mouse cursor.</p>
 </dd>
 <dt>escape</dt>
 <dd><p>Cancel current region.</p>
@@ -805,12 +802,12 @@ region you wish to exclude.</p>
 </dl>
 <p>Some additional tools are made available to facilitate this process:</p>
 <ul class="simple">
-<li><p>You can copy a set of excluded regions to any other spiral.</p></li>
 <li><p>You can merge all excluded regions across the OHC spirals into a single set
-of excluded regions that apply to all OHC spirals.&lt;/li&gt;</p></li>
+of excluded regions that apply to all OHC spirals (<cite>Combine OHC exclusions</cite>
+button).</p></li>
 <li><p>You can simplify a set of excluded regions for a particular spiral if they
 are overlapping (this will combine overlapping exclusion regions into
-a single exclusion region).</p></li>
+a single exclusion region) using the <cite>Simplify exclusions</cite> button.</p></li>
 </ul>
 </section>
 </section>
