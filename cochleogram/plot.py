@@ -82,9 +82,10 @@ def plot_slide_layout(cochlea):
     return figure
 
 
-def plot_tile(ax, tile):
+def plot_tile(ax, tile, **kwargs):
     ax.imshow(tile.get_image().swapaxes(0, 1),
               origin='lower',
               aspect='equal',
               transform=tile.get_image_transform() + ax.transData,
-              extent=tile.get_image_extent())
+              extent=tile.get_image_extent(),
+              **kwargs)
