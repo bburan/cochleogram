@@ -511,10 +511,17 @@ enamldef CompositeWindow(Window):
                     critical(self, 'Plotting', str(e))
 
 
+def get_title(reader):
+    if reader is None:
+        return 'Cochleogram'
+    else:
+        return f'Cochleogram :: {reader.get_name()}'
+
+
 enamldef CochleagramWindow(MainWindow): window:
 
     initial_size = (900, 900)
-    title = 'Cochelogram'
+    title << get_title(reader)
     icon = load_icon('main-icon')
 
     attr reader
