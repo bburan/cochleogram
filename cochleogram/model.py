@@ -486,6 +486,10 @@ class Piece:
         self.region = region
 
     @property
+    def is_copy(self):
+        return bool(self.copied_from)
+
+    @property
     def channel_names(self):
         # We assume that each tile has the same set of channels
         return self.tiles[0].channel_names
@@ -561,6 +565,7 @@ class Piece:
             'tiles': {t.source: t.get_state() for t in self.tiles},
             'spirals': {k: v.get_state() for k, v in self.spirals.items()},
             'cells': {k: v.get_state() for k, v in self.cells.items()},
+            'copied_from': self.copied_from,
         }
 
     def set_state(self, state):

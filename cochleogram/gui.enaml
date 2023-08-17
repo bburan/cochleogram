@@ -225,7 +225,7 @@ enamldef MPLDockItem(DockItem): dock_item:
                   action_clear_spiral, action_clear_cells,
                   action_simplify_exclusions, action_merge_ohc_exclusions),
             align('left', display_label, tool_label, action_label),
-            align('left', mode_buttons, action_clear_spiral,
+            align('left', mode_buttons, action_auto_align_tiles,
                   action_guess_cells, action_copy_exclusion),
             guess_width.width == 50,
             guess_spacing.width == 50,
@@ -303,7 +303,7 @@ enamldef MPLDockItem(DockItem): dock_item:
                         presenter.tool = 'tile'
 
             ObjectCombo:
-                items = CELLS
+                items << ['IHC'] if presenter.piece.is_copy else CELLS
                 selected := presenter.cells
 
             Looper:
@@ -312,7 +312,8 @@ enamldef MPLDockItem(DockItem): dock_item:
                     icon = load_icon(loop_item)
                     icon_size = (20, 20)
                     tool_tip = loop_item
-                    enabled << not (presenter.cells == 'Extra' and loop_item != 'cells')
+                    enabled << not (presenter.piece.is_copy and loop_item != 'spiral') \
+                        and not (presenter.cells == 'Extra' and loop_item != 'cells')
                     group = tool_group
                     checkable = True
                     checked << loop_item == presenter.tool
@@ -332,7 +333,9 @@ enamldef MPLDockItem(DockItem): dock_item:
 
         PushButton: action_clear_spiral:
             text = 'Clear spiral'
-            enabled << presenter.current_spiral_artist is not None and presenter.current_spiral_artist.has_nodes
+            enabled << (presenter.current_spiral_artist is not None) \
+                and presenter.current_spiral_artist.has_nodes \
+                and not presenter.piece.is_copy
             clicked ::
                 button = question(self, 'Confirm action', 'Are you sure you want to remove the current spiral?')
                 if button is not None and button.text == 'Yes':
@@ -340,7 +343,9 @@ enamldef MPLDockItem(DockItem): dock_item:
 
         PushButton: action_clear_cells:
             text = 'Clear all cells'
-            enabled << presenter.current_cells_artist is not None and presenter.current_cells_artist.has_nodes
+            enabled << (presenter.current_cells_artist is not None) \
+                and presenter.current_cells_artist.has_nodes \
+                and not presenter.piece.is_copy
             clicked ::
                 button = question(self, 'Confirm action', 'Are you sure you want to remove the current cells?')
                 if button is not None and button.text == 'Yes':
@@ -352,7 +357,9 @@ enamldef MPLDockItem(DockItem): dock_item:
 
         PushButton: action_simplify_exclusions:
             text = 'Simplify exclusions'
-            enabled << presenter.current_spiral_artist is not None and presenter.current_spiral_artist.has_exclusion
+            enabled << (presenter.current_spiral_artist is not None) \
+                and presenter.current_spiral_artist.has_exclusion \
+                and not presenter.piece.is_copy
             clicked ::
                 m = f'Are you sure you want to simplify the excluded regions?'
                 button = question(self, 'Confirm action', m)
@@ -365,13 +372,15 @@ enamldef MPLDockItem(DockItem): dock_item:
 
         PushButton: action_merge_ohc_exclusions:
             text = 'Combine OHC exclusions'
-            enabled << presenter.point_artists['OHC1', 'spiral'].has_spline and \
-                presenter.point_artists['OHC2', 'spiral'].has_spline and \
-                presenter.point_artists['OHC3', 'spiral'].has_spline and (\
-                    presenter.point_artists['OHC1', 'spiral'].has_exclusion or \
-                    presenter.point_artists['OHC2', 'spiral'].has_exclusion or \
-                    presenter.point_artists['OHC3', 'spiral'].has_exclusion \
-                                                                          )
+            enabled << presenter.point_artists['OHC1', 'spiral'].has_spline \
+                and not presenter.piece.is_copy \
+                and presenter.point_artists['OHC2', 'spiral'].has_spline \
+                and presenter.point_artists['OHC3', 'spiral'].has_spline \
+                and (
+                    presenter.point_artists['OHC1', 'spiral'].has_exclusion \
+                    or presenter.point_artists['OHC2', 'spiral'].has_exclusion \
+                    or presenter.point_artists['OHC3', 'spiral'].has_exclusion \
+                )
             clicked ::
                 m = f'Are you sure you want to merge all OHC excluded regions together?\n' \
                     'This will also simplify the excluded regions.'
@@ -398,7 +407,8 @@ enamldef MPLDockItem(DockItem): dock_item:
             align_widths = False
             share_layout = True
             trailing_spacer = spacer(0)
-            enabled << presenter.current_spiral_artist is not None and presenter.current_spiral_artist.has_spline
+            enabled << (presenter.current_spiral_artist is not None) \
+                and presenter.current_spiral_artist.has_spline
             Label:
                 text = 'Find cells within'
             FloatField: guess_width:
