@@ -226,6 +226,10 @@ class Points(Atom):
         self.exclude = [[[xi[si], yi[si]], [xi[ei], yi[ei]]] for si, ei in indices]
         self.updated = True
 
+    def clear(self):
+        self.exclude = []
+        self.set_nodes([], [])
+
     def get_state(self):
         return {
             "x": self.x,
@@ -599,10 +603,10 @@ class Piece:
         return len(xnc)
 
     def clear_cells(self, cell_type):
-        self.cells[cell_type].set_nodes([], [])
+        self.cells[cell_type].clear()
 
     def clear_spiral(self, cell_type):
-        self.spirals[cell_type].set_nodes([], [])
+        self.spirals[cell_type].clear()
 
     def align_tiles(self, alignment_channel='MyosinVIIa'):
         # First, figure out the order in which we should work on the alignment.
