@@ -628,11 +628,19 @@ example:</p>
 </blockquote>
 <p>Inside each file, the pieces must be numbered sequentially from base (hook) to
 apex. If more htan one image is required for a piece, use letters for the
-suffixes (i.e., &quot;piece2a&quot;, &quot;piece2b&quot;, etc.). The order in which the images for
-a single piece are labeled does not matter since the program will automatically
-align them based on the stage coordinates stored in the file.</p>
-<p>We currently do not have support for missing pieces. This will be added once
-the need arises.</p>
+suffixes (i.e., &quot;piece_2a&quot;, &quot;piece_2b&quot;, etc.). The order in which the images
+for a single piece are labeled does not matter since the program will
+automatically align them based on the stage coordinates stored in the file.</p>
+</section>
+<section id="missing-pieces">
+<h3>Missing pieces</h3>
+<p>If a piece is missing, you can copy the image stacks for a matching piece from
+another file (for LIF files, you can use LAS X Office). To indicate that the
+piece is a copy, it must have the suffix <cite>copied_&lt;note&gt;</cite>. For example, if you
+copy piece_4a and piece_4b from B009-8L to the file containing data for
+B021-3L, the copied images should be named &quot;piece_4a_copy_B009-8L&quot; and
+&quot;piece_4b_copy_B009-8L&quot;. The note will appear in the composite generated for
+the frequency map.</p>
 </section>
 </section>
 <section id="using-the-program">
@@ -739,6 +747,9 @@ shown with a red border.</p>
 <dd><p>Select previous tile</p>
 </dd>
 </dl>
+<p>An &quot;align tiles&quot; tool is provided to facilitate this step. It uses an automated
+algorithm that attempts to align the tiles based on the correlation between the
+images (using the MyosinVIIa channel).</p>
 <p><strong>Spiral mode</strong></p>
 <p>Once you are satisfied with the alignment of the tiles, select &quot;IHC&quot; from the
 edit buttons and be sure the spiral tool to the right of the edit buttons are

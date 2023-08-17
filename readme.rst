@@ -27,12 +27,20 @@ example:
 
 Inside each file, the pieces must be numbered sequentially from base (hook) to
 apex. If more htan one image is required for a piece, use letters for the
-suffixes (i.e., "piece2a", "piece2b", etc.). The order in which the images for
-a single piece are labeled does not matter since the program will automatically
-align them based on the stage coordinates stored in the file.
+suffixes (i.e., "piece_2a", "piece_2b", etc.). The order in which the images
+for a single piece are labeled does not matter since the program will
+automatically align them based on the stage coordinates stored in the file.
 
-We currently do not have support for missing pieces. This will be added once
-the need arises.
+Missing pieces
+..............
+
+If a piece is missing, you can copy the image stacks for a matching piece from
+another file (for LIF files, you can use LAS X Office). To indicate that the
+piece is a copy, it must have the suffix `copied_<note>`. For example, if you
+copy piece_4a and piece_4b from B009-8L to the file containing data for
+B021-3L, the copied images should be named "piece_4a_copy_B009-8L" and
+"piece_4b_copy_B009-8L". The note will appear in the composite generated for
+the frequency map.
 
 Using the program
 -----------------
@@ -116,6 +124,10 @@ n
     Select next tile
 p
     Select previous tile
+
+An "align tiles" tool is provided to facilitate this step. It uses an automated
+algorithm that attempts to align the tiles based on the correlation between the
+images (using the MyosinVIIa channel).
 
 **Spiral mode**
 
