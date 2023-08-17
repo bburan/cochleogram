@@ -65,6 +65,10 @@ def _plot_piece(ax, piece, xo, yo, xmax, ymax, freq_map=None, cells=None,
     return xo, yo, xmax, ymax
 
 
+def plot_piece(ax, piece):
+    _plot_piece(ax, piece, 0, 0, 0, 0)
+
+
 def plot_composite(cochlea, include_freq_map=True, cells=None, channels=None,
                    label_pieces=True):
     figure, ax = plt.subplots(1, 1, figsize=(11, 8.5))

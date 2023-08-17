@@ -11,6 +11,9 @@ from psiaudio.util import octave_space
 from scipy import interpolate
 from scipy import ndimage
 from scipy import signal
+from skimage.registration import phase_cross_correlation
+from skimage.color import rgb2gray
+
 from raster_geometry import sphere
 
 from cochleogram import util
@@ -595,6 +598,38 @@ class Piece:
 
     def clear_spiral(self, cell_type):
         self.spirals[cell_type].set_nodes([], [])
+
+    def align_tiles(self, alignment_channel='MyosinVIIa'):
+        # First, figure out the order in which we should work on the alignment.
+        # Let's keep it basic by just sorting by lower left corner of the xy
+        # coordinate.
+        if len(self.tiles) < 2:
+            return
+        corners = [tuple(t.get_rotated_extent()[::2][:2]) for t in self.tiles]
+        order = sorted(range(len(corners)), key=lambda x: corners[x])
+
+        base_tile = self.tiles[order[0]]
+        base_img = ndimage.rotate(base_tile.get_image(alignment_channel), base_tile.get_rotation())
+        base_img = rgb2gray(base_img)
+        base_mask = base_img > np.percentile(base_img, 95)
+
+        x_um_per_px, y_um_per_px = base_tile.info['voxel_size'][:2]
+
+        for i in order[1:]:
+            tile = self.tiles[i]
+            img = ndimage.rotate(tile.get_image(alignment_channel), tile.get_rotation())
+            img = rgb2gray(img)
+            mask = img > np.percentile(img, 95)
+            x_shift, y_shift = phase_cross_correlation(base_img, img,
+                                                       reference_mask=base_mask,
+                                                       moving_mask=mask)
+            extent = np.array(base_tile.extent[:])
+            extent[0:2] += x_shift * x_um_per_px
+            extent[2:4] += y_shift * y_um_per_px
+            tile.extent = extent.tolist()
+            base_tile = tile
+            base_img = img
+            base_mask = mask
 
 
 freq_fn = {

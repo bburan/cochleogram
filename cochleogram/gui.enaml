@@ -209,7 +209,8 @@ enamldef MPLDockItem(DockItem): dock_item:
                      z_slice_number_label, z_slice, display_apply,
                      highlight_selected),
                 hbox(tool_label, mode_buttons, spacer, load_analysis, save_analysis),
-                hbox(action_label, action_clear_spiral, action_clear_cells,
+                hbox(action_label, action_auto_align_tiles,
+                     action_clear_spiral, action_clear_cells,
                      action_simplify_exclusions, action_merge_ohc_exclusions,
                      spacer, spacing=0),
                 action_guess_cells,
@@ -220,9 +221,9 @@ enamldef MPLDockItem(DockItem): dock_item:
                   display_mode, z_slice_number_label, z_slice, display_apply,
                   highlight_selected),
             align('v_center', tool_label, mode_buttons),
-            align('v_center', action_label, action_clear_spiral,
-                  action_clear_cells, action_simplify_exclusions,
-                  action_merge_ohc_exclusions),
+            align('v_center', action_label, action_auto_align_tiles,
+                  action_clear_spiral, action_clear_cells,
+                  action_simplify_exclusions, action_merge_ohc_exclusions),
             align('left', display_label, tool_label, action_label),
             align('left', mode_buttons, action_clear_spiral,
                   action_guess_cells, action_copy_exclusion),
@@ -321,6 +322,13 @@ enamldef MPLDockItem(DockItem): dock_item:
 
         Label: action_label:
             text = 'Actions'
+
+        PushButton: action_auto_align_tiles:
+            text = 'Align tiles'
+            clicked ::
+                button = question(self, 'Confirm action', 'Are you sure you want to update alignment of tiles?')
+                if button is not None and button.text == 'Yes':
+                    presenter.action_auto_align_tiles()
 
         PushButton: action_clear_spiral:
             text = 'Clear spiral'

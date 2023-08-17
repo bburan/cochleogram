@@ -475,6 +475,9 @@ class Presenter(Atom):
         if tool is not None:
             self.tool = tool
 
+    def action_auto_align_tiles(self):
+        self.piece.align_tiles()
+
     def action_guess_cells(self, width, spacing, channel):
         n = self.piece.guess_cells(self.cells, width, spacing, channel)
         self.set_interaction_mode(None, 'cells')
