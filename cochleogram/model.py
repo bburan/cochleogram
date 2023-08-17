@@ -524,13 +524,13 @@ class Piece:
             else:
                 img = tile.image
 
-            tile_lb = tile.get_rotated_extent()[::2]
-            tile_lb = np.round((tile_lb - merged_lb) / voxel_size).astype("i")
-            tile_ub = tile_lb + img.shape[:-1]
 
             if tile.get_rotation() != 0:
                 img = ndimage.rotate(img, tile.get_rotation(), cval=np.nan, order=0)
 
+            tile_lb = tile.get_rotated_extent()[::2]
+            tile_lb = np.round((tile_lb - merged_lb) / voxel_size).astype("i")
+            tile_ub = tile_lb + img.shape[:-1]
             s = tuple([np.s_[lb:ub] for lb, ub in zip(tile_lb, tile_ub)])
             merged_image[s] += img
             merged_n[s] += 1
