@@ -91,7 +91,7 @@ def plot_composite(cochlea, include_freq_map=True, cells=None, channels=None,
     ax.set_xticks([])
     ax.set_yticks([])
 
-    figure.subplots_adjust(left=0.025, right=0.975, top=0.95, bottom=0.025)
+    figure.subplots_adjust(left=0.025, right=0.975, top=0.9, bottom=0.025)
     return figure
 
 
