@@ -501,7 +501,7 @@ class Piece:
         ymax = extents[:, 3].max()
         return [xmin, xmax, ymin, ymax]
 
-    def merge_tiles(self):
+    def merge_tiles(self, flatten=True):
         '''
         Merges the information from the tiles into one single tile representing the piece
 
@@ -514,18 +514,29 @@ class Piece:
         lb_pixels = np.floor(merged_lb / voxel_size).astype("i")
         ub_pixels = np.ceil(merged_ub / voxel_size).astype("i")
         extent_pixels = ub_pixels - lb_pixels
-        shape = [len(self.tiles)] + extent_pixels.tolist() + [self.tiles[0].n_channels]
-        merged_image = np.full(shape, fill_value=np.nan, dtype=float)
+        shape = extent_pixels.tolist() + [self.tiles[0].n_channels]
+        merged_image = np.full(shape, fill_value=0, dtype=int)
+        merged_n = np.full(shape, fill_value=0, dtype=int)
 
         for i, tile in enumerate(self.tiles):
-            img = ndimage.rotate(tile.image, tile.get_rotation(), cval=np.nan)
+            if flatten:
+                img = tile.image.max(axis=2, keepdims=True)
+            else:
+                img = tile.image
+
             tile_lb = tile.get_rotated_extent()[::2]
             tile_lb = np.round((tile_lb - merged_lb) / voxel_size).astype("i")
             tile_ub = tile_lb + img.shape[:-1]
-            s = tuple([i] + [np.s_[lb:ub] for lb, ub in zip(tile_lb, tile_ub)])
-            merged_image[s] = img
 
-        merged_image = np.nan_to_num(np.nanmean(merged_image, axis=0)).astype('i')
+            if tile.get_rotation() != 0:
+                img = ndimage.rotate(img, tile.get_rotation(), cval=np.nan, order=0)
+
+            s = tuple([np.s_[lb:ub] for lb, ub in zip(tile_lb, tile_ub)])
+            merged_image[s] += img
+            merged_n[s] += 1
+
+        merged_image = merged_image / merged_n
+        merged_image = merged_image.astype('i')
 
         info = {
             "lower": merged_lb,
