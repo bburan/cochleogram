@@ -5,7 +5,7 @@ import numpy as np
 
 
 def _plot_piece(ax, piece, xo, yo, xmax, ymax, freq_map=None, cells=None,
-                channels=None):
+                channels=None, label_piece=False, label_position='bottom'):
     tile = piece.merge_tiles()
     img = tile.get_image(channels=channels)
     extent = tile.get_image_extent()
@@ -16,9 +16,6 @@ def _plot_piece(ax, piece, xo, yo, xmax, ymax, freq_map=None, cells=None,
     extent = (xo, xo+xe, yo, yo+ye)
     t = tile.get_image_transform() + ax.transData
     ax.imshow(img.swapaxes(0, 1), origin='lower', extent=extent, transform=t)
-    xo += xe
-    ymax = max(ymax, yo+ye)
-    xmax = max(xmax, xo)
 
     if freq_map is not None:
         for freq, freq_df in freq_map.items():
@@ -41,10 +38,35 @@ def _plot_piece(ax, piece, xo, yo, xmax, ymax, freq_map=None, cells=None,
             y = np.subtract(y, yr)
             ax.plot(x, y, 'w.')
 
+    if label_piece:
+        label = f'Piece {piece.piece}'
+        if piece.region is not None:
+            label = f'{label} ({piece.region})'
+        if piece.copied_from:
+            label = f'{label} from {piece.copied_from}'
+
+        x = xo + xe / 2
+        if label_position == 'bottom':
+            y = yo
+            va = 'top'
+        else:
+            y = yo + ye
+            va = 'bottom'
+
+        t = ax.text(x, y, label, color='black', ha='center', va=va)
+        t.set_path_effects([
+            path_effects.Stroke(linewidth=3, foreground='white'),
+            path_effects.Normal(),
+        ])
+
+    xo += xe
+    ymax = max(ymax, yo+ye)
+    xmax = max(xmax, xo)
     return xo, yo, xmax, ymax
 
 
-def plot_composite(cochlea, include_freq_map=True, cells=None, channels=None):
+def plot_composite(cochlea, include_freq_map=True, cells=None, channels=None,
+                   label_pieces=True):
     figure, ax = plt.subplots(1, 1, figsize=(11, 8.5))
     if include_freq_map:
         freq_map = cochlea.make_frequency_map()
@@ -55,11 +77,15 @@ def plot_composite(cochlea, include_freq_map=True, cells=None, channels=None):
     xmax, ymax = 0, 0
     for piece in cochlea.pieces[:3]:
         xo, yo, xmax, ymax = _plot_piece(ax, piece, xo, yo, xmax, ymax,
-                                         freq_map, cells, channels)
+                                         freq_map, cells, channels,
+                                         label_piece=label_pieces,
+                                         label_position='bottom')
     xo, yo = 0, ymax
     for piece in cochlea.pieces[3:]:
         xo, yo, xmax, ymax = _plot_piece(ax, piece, xo, yo, xmax, ymax,
-                                         freq_map, cells, channels)
+                                         freq_map, cells, channels,
+                                         label_piece=label_pieces,
+                                         label_position='top')
     ax.set_facecolor('k')
     ax.axis([0, xmax, 0, ymax])
     ax.set_xticks([])

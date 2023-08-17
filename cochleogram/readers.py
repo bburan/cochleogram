@@ -44,6 +44,7 @@ class Reader:
 
     def save_figure(self, fig, suffix):
         filename = self.save_path() / f'{self.get_name()}_{suffix}.pdf'
+        filename.parent.mkdir(exist_ok=True)
         fig.savefig(filename)
 
 
@@ -73,6 +74,13 @@ class LIFReader(Reader):
     def load_piece(self, piece, stack_names):
         tiles = [self._load_tile(sn) for sn in stack_names]
 
+        copy = re.compile(fr'^piece_{piece}_copied_([\w-]+)')
+        copied = set()
+        for sn in stack_names:
+            if (m := copy.match(sn)) is not None:
+                copied.add(m.group(1))
+        copied = ', '.join(sorted(copied))
+
         # This pads the z-axis so that we have empty slices above/below stacks
         # such that they should align properly in z-space. This simplifies a
         # few downstream operations.
@@ -94,7 +102,7 @@ class LIFReader(Reader):
             t.image = np.pad(t.image, padding)
             t.extent[4:] = [z_min, z_max]
 
-        return model.Piece(tiles, piece)
+        return model.Piece(tiles, piece, copied_from=copied)
 
     def load_cochlea(self):
         pieces = [self.load_piece(p, sn) for p, sn in self.list_pieces().items()]
@@ -131,6 +139,13 @@ class ProcessedReader(Reader):
         log.info('Found tiles: %r', [t.stem for t in tile_filenames])
         tiles = [self._load_tile(f) for f in tile_filenames]
 
+        copy = re.compile(fr'^.*piece_{piece}_copied_([\w-]+)')
+        copied = set()
+        for tf in tile_filenames:
+            if (m := copy.match(tf.stem)) is not None:
+                copied.add(m.group(1))
+        copied = ', '.join(sorted(copied))
+
         # This pads the z-axis so that we have empty slices above/below stacks
         # such that they should align properly in z-space. This simplifies a
         # few downstream operations.
@@ -151,8 +166,7 @@ class ProcessedReader(Reader):
             padding = [(0, 0), (0, 0), (pb, pt), (0, 0)]
             t.image = np.pad(t.image, padding)
             t.extent[4:] = [z_min, z_max]
-
-        return model.Piece(tiles, piece)
+        return model.Piece(tiles, piece, copied_from=copied)
 
     def load_cochlea(self):
         pieces = [self.load_piece(p) for p in self.list_pieces()]

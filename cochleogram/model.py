@@ -473,12 +473,14 @@ class Tile(Atom):
 
 class Piece:
 
-    def __init__(self, tiles, piece):
+    def __init__(self, tiles, piece, copied_from=None, region=None):
         self.tiles = tiles
         self.piece = piece
+        self.copied_from = copied_from
         keys = 'IHC', 'OHC1', 'OHC2', 'OHC3', 'Extra'
         self.spirals = {k: Points() for k in keys}
         self.cells = {k: Points() for k in keys}
+        self.region = region
 
     @property
     def channel_names(self):
@@ -593,6 +595,8 @@ class Cochlea:
 
     def __init__(self, pieces):
         self.pieces = pieces
+        self.pieces[0].region = 'hook'
+        self.pieces[-1].region = 'apex'
 
     @property
     def channel_names(self):
