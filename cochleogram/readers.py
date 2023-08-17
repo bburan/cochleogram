@@ -16,7 +16,15 @@ class Reader:
     def __init__(self, path):
         self.path = Path(path)
 
-    def load_cochlea(self):
+    def load_cochlea(self, load_analysis=False):
+        cochlea = self._load_cochlea()
+        if load_analysis:
+            for piece in cochlea.pieces:
+                state = self.load_state(piece)
+                piece.set_state(state['data'])
+        return cochlea
+
+    def _load_cochlea(self):
         raise NotImplementedError
 
     def save_analysis(self, state, piece):
@@ -104,7 +112,7 @@ class LIFReader(Reader):
 
         return model.Piece(tiles, piece, copied_from=copied)
 
-    def load_cochlea(self):
+    def _load_cochlea(self):
         pieces = [self.load_piece(p, sn) for p, sn in self.list_pieces().items()]
         if len(pieces) == 0:
             raise IOError(f'No pieces found in {self.path}')
@@ -168,7 +176,7 @@ class ProcessedReader(Reader):
             t.extent[4:] = [z_min, z_max]
         return model.Piece(tiles, piece, copied_from=copied)
 
-    def load_cochlea(self):
+    def _load_cochlea(self):
         pieces = [self.load_piece(p) for p in self.list_pieces()]
         if len(pieces) == 0:
             raise IOError(f'No pieces found in {self.path}')
