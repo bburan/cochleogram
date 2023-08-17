@@ -74,7 +74,7 @@ class LIFReader(Reader):
     def load_piece(self, piece, stack_names):
         tiles = [self._load_tile(sn) for sn in stack_names]
 
-        copy = re.compile(fr'^piece_{piece}_copied_([\w-]+)')
+        copy = re.compile(fr'^piece_{piece}\w?_copied_([\w-]+)')
         copied = set()
         for sn in stack_names:
             if (m := copy.match(sn)) is not None:
@@ -139,7 +139,7 @@ class ProcessedReader(Reader):
         log.info('Found tiles: %r', [t.stem for t in tile_filenames])
         tiles = [self._load_tile(f) for f in tile_filenames]
 
-        copy = re.compile(fr'^.*piece_{piece}_copied_([\w-]+)')
+        copy = re.compile(fr'^.*piece_{piece}\w?_copied_([\w-]+)')
         copied = set()
         for tf in tile_filenames:
             if (m := copy.match(tf.stem)) is not None:
