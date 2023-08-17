@@ -535,7 +535,6 @@ class Piece:
             else:
                 img = tile.image
 
-
             if tile.get_rotation() != 0:
                 img = ndimage.rotate(img, tile.get_rotation(), cval=np.nan, order=0)
 
@@ -590,11 +589,11 @@ class Piece:
 
         # Map to centroid
         xni, yni = tile.to_indices(xn, yn)
+
         image = tile.get_image(channel).max(axis=-1)
         x_radius = tile.to_indices_delta(width, 'x')
         y_radius = tile.to_indices_delta(width, 'y')
-        log.info('Searching for centroid within %ix%i pixels of spiral', x_radius,
-                 y_radius)
+        log.info('Searching for centroid within %ix%i pixels of spiral', x_radius, y_radius)
         xnic, ynic = util.find_centroid(xni, yni, image, x_radius, y_radius, 4)
         xnc, ync = tile.to_coords(xnic, ynic)
         log.info('Shifted points up to %.0f x %.0f microns',

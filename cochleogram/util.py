@@ -1,3 +1,5 @@
+import logging as log
+
 from importlib.metadata import version
 import json
 import re
@@ -74,13 +76,21 @@ def find_centroid(x, y, image, rx, ry, factor=4):
     x_center, y_center = [], []
     x = np.asarray(x)
     y = np.asarray(y)
+
     for xi, yi in zip(x, y):
         ylb, yub = int(round(yi-ry)), int(round(yi+ry))
         xlb, xub = int(round(xi-rx)), int(round(xi+rx))
         i = image[xlb:xub, ylb:yub].astype('int64')
         xc, yc = ndimage.center_of_mass(i ** factor)
-        x_center.append(xc - rx)
-        y_center.append(yc - ry)
+        if np.isnan(xc) or np.isnan(yc):
+            # If there are zero division errors (e.g., the entire ROI is zero),
+            # then center_of_mass returns NaN.
+            x_center.append(0)
+            y_center.append(0)
+        else:
+            x_center.append(xc - rx)
+            y_center.append(yc - ry)
+
     x_center = x + np.array(x_center)
     y_center = y + np.array(y_center)
     return x_center, y_center
