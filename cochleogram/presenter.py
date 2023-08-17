@@ -418,8 +418,11 @@ class Presenter(Atom):
         self.check_for_changes()
 
     def check_for_changes(self):
-        self.unsaved_changes = self.saved_state['data'] != \
-            self.get_full_state()['data']
+        saved = self.saved_state['data'].copy()
+        saved.pop('copied_from', None)
+        unsaved = self.get_full_state()['data']
+        unsaved.pop('copied_from', None)
+        self.unsaved_changes = saved != unsaved
 
     def update(self, event=None):
         self.check_for_changes()
