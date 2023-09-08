@@ -219,6 +219,14 @@ enamldef PBActionClearCells(PushButton):
                 information(self, 'Error', str(e))
 
 
+def guess_cells_channel(cells, channel_names):
+    if cells == 'IHC' and 'CtBP2' in channel_names:
+        return 'CtBP2'
+    if 'MyosinVIIa' in channel_names:
+        return 'MyosinVIIa'
+    return channel_names[0]
+
+
 enamldef ActionGuessCells(HGroup):
     attr presenter
     attr is_copy = False
@@ -241,7 +249,7 @@ enamldef ActionGuessCells(HGroup):
         text = 'μm using'
     ObjectCombo: guess_channel:
         items = presenter.obj.channel_names
-        selected << items[0]
+        selected << guess_cells_channel(presenter.cells, presenter.obj.channel_names)
 
     PushButton:
         text = 'update'
