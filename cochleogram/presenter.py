@@ -466,7 +466,6 @@ class BasePresenter(Atom):
     #: on the confocal.
     rotate_tiles = Bool(True)
 
-
     def __init__(self, obj, reader, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.obj = obj
@@ -777,6 +776,15 @@ class CellCountPresenter(BasePresenter):
 
     def right_button_press(self, event):
         self.button_press_point_plot(event)
+
+    def set_interaction_mode(self, cells=None, tool=None):
+        if cells is not None and tool is None:
+            if not self.point_artists[cells, 'spiral'].has_nodes:
+                tool = 'spiral'
+            else:
+                tool = 'cells'
+        super().set_interaction_mode(cells, tool)
+
 
 
 class CochleogramPresenter(BasePresenter):
