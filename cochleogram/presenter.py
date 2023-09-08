@@ -761,14 +761,19 @@ class BasePresenter(Atom):
     def _observe_current_artist_index(self, event):
         self.current_artist = list(self.tile_artists.values())[self.current_artist_index]
 
+    def _observe_saved_state(self, event):
+        self.check_for_changes()
+
+    def check_for_changes(self):
+        saved = self.saved_state['data'].copy()
+        unsaved = self.get_full_state()['data']
+        self.unsaved_changes = saved != unsaved
+
 
 class CellCountPresenter(BasePresenter):
 
     available_tools = set_default(('spiral', 'cells'))
     rotate_tiles = set_default(False)
-
-    def check_for_changes(self):
-        pass
 
     def right_button_press(self, event):
         self.button_press_point_plot(event)
