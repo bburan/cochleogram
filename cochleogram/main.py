@@ -60,8 +60,6 @@ def main():
     from enaml.qt.qt_application import QtApplication
     logging.basicConfig(level='INFO')
 
-    from cochleogram.presenter import Presenter
-
     with enaml.imports():
         from cochleogram.gui import CochleagramWindow, load_dataset
 

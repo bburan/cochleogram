@@ -1,4 +1,5 @@
 import logging
+
 log = logging.getLogger(__name__)
 
 import json
@@ -11,7 +12,24 @@ from . import model
 from . import util
 
 
-class Reader:
+class BaseReader:
+
+    def state_filename(self, obj):
+        raise NotImplementedError
+
+    def load_state(self, obj):
+        state_filename = self.state_filename(obj)
+        if not state_filename.exists():
+            raise IOError('No saved analysis found')
+        return json.loads(state_filename.read_text())
+
+    def save_state(self, obj, state):
+        state_filename = self.state_filename(obj)
+        state_filename.parent.mkdir(exist_ok=True)
+        state_filename.write_text(json.dumps(obj, indent=4))
+
+
+class Reader20x(BaseReader):
 
     def __init__(self, path):
         self.path = Path(path)
@@ -27,25 +45,8 @@ class Reader:
     def _load_cochlea(self):
         raise NotImplementedError
 
-    def save_analysis(self, state, piece):
-        raise NotImplementedError
-
-    def load_analysis(self, cochlea):
-        raise NotImplementedError
-
     def state_filename(self, piece):
         raise NotImplementedError
-
-    def load_state(self, piece):
-        state_filename = self.state_filename(piece)
-        if not state_filename.exists():
-            raise IOError('No saved analysis found')
-        return json.loads(state_filename.read_text())
-
-    def save_state(self, piece, state):
-        state_filename = self.state_filename(piece)
-        state_filename.parent.mkdir(exist_ok=True)
-        state_filename.write_text(json.dumps(state, indent=4))
 
     def get_name(self):
         return self.path.stem
@@ -56,7 +57,7 @@ class Reader:
         fig.savefig(filename)
 
 
-class LIFReader(Reader):
+class LIFReader20x(Reader20x):
 
     def __init__(self, path):
         from readlif.reader import LifFile
@@ -125,7 +126,7 @@ class LIFReader(Reader):
         return self.save_path() / f'{self.path.stem}_piece_{piece.piece}_analysis.json'
 
 
-class ProcessedReader(Reader):
+class ProcessedReader20x(Reader20x):
 
     def list_pieces(self):
         p_piece = re.compile('.*piece_(\d+)\w?')
@@ -183,10 +184,70 @@ class ProcessedReader(Reader):
         return model.Cochlea(pieces)
 
     def state_filename(self, piece):
-        return self.path /  f'{self.path.stem}_piece_{piece.piece}_analysis.json'
+        return self.path / f'{self.path.stem}_piece_{piece.piece}_analysis.json'
 
     def save_path(self):
         return self.path
 
     def state_filename(self, piece):
         return self.save_path() / f'{self.path.stem}_piece_{piece.piece}_analysis.json'
+
+
+class TileReader(BaseReader):
+    '''
+    Simple reader that loads a tile collection
+    '''
+    def __init__(self, path, pattern=None):
+        if pattern is None:
+            pattern = '(.*)'
+        self.path = Path(path)
+        self.pattern = re.compile(pattern)
+
+    def load_tile_collection(self, load_analysis=False):
+        tile_collection = self._load_tile_collection()
+        if load_analysis:
+            for tile in tile_collection.tiles:
+                state = self.load_state(tile)
+                tile.set_state(state['data'])
+        return tile_collection
+
+    def _load_tile_collection(self):
+        raise NotImplementedError
+
+    def get_name(self):
+        return self.path.stem
+
+    def state_filename(self, piece):
+        raise NotImplementedError
+
+
+class LIFTileReader(TileReader):
+
+    def __init__(self, path, pattern='(.*OHC.*)'):
+        from readlif.reader import LifFile
+        super().__init__(path, pattern)
+        self.fh = LifFile(path)
+
+    def _load_tile_collection(self):
+        tiles = [self.load_tile(r) for r in self.list_tiles()]
+        return model.TileCollection(tiles=tiles)
+
+    def load_tile(self, tile_name):
+        info, img = util.load_lif(self.path, tile_name)
+        return model.Tile(info, img, source=tile_name)
+
+    def list_tiles(self):
+        tile_names = {}
+        for img in self.fh.get_iter_image():
+            try:
+                tile_name = self.pattern.match(img.name).group(1)
+                tile_names[img.name] = tile_name
+            except Exception as e:
+                pass
+        return tile_names
+
+    def save_path(self):
+        return self.path.parent / self.path.stem
+
+    def state_filename(self, obj):
+        return self.save_path() / f'{obj.name}_analysis.json'

@@ -21,7 +21,7 @@ from enaml.widgets.api import (Action, ButtonGroup, CheckBox, Container,
 
 from cochleogram import plot, util
 from cochleogram.model import Cochlea
-from cochleogram.presenter import Presenter
+from cochleogram.presenter import CochleogramPresenter, CellCountPresenter
 from cochleogram import readers
 
 
@@ -40,7 +40,10 @@ def bind(figure, presenter):
     figure.canvas.mpl_connect('motion_notify_event', lambda e: presenter.motion(e))
 
 
-def open_processed_dataset(window):
+################################################################################
+# 20x functions (i.e., cochleogram counts)
+################################################################################
+def open_20x_processed_dataset(window):
     # Check for unsaved changes
     if any(p.unsaved_changes for p in window.presenters):
         q = 'There are unsaved changes. Your current analysis will be lost. Are you sure?'
@@ -50,7 +53,7 @@ def open_processed_dataset(window):
 
     path = FileDialogEx.get_existing_directory(window, current_path=str(window.current_path))
     if path:
-        load_dataset(path, window, readers.ProcessedReader)
+        load_20x_dataset(path, window, readers.ProcessedReader)
 
 
 def open_20x_lif_file(window):
@@ -63,10 +66,10 @@ def open_20x_lif_file(window):
 
     path = FileDialogEx.get_open_file_name(window, current_path=str(window.current_path))
     if path:
-        load_dataset(path, window, readers.LIFReader)
+        load_20x_dataset(path, window, readers.LIFReader)
 
 
-def load_dataset(path, window, reader_class=None):
+def load_20x_dataset(path, window, reader_class=None):
     path = Path(path)
     if reader_class is None:
         if path.is_dir():
@@ -78,28 +81,76 @@ def load_dataset(path, window, reader_class=None):
 
     # First, make sure we can load the cochlea
     reader = reader_class(path)
-    window.cochlea = reader.load_cochlea()
+
+    # Remove existing presenters and close any cochlea that was loaded
+    window.tile_collection = None
+    window.cochlea = None
+    workspace = window.find('dock_area')
+    for p in window.presenters:
+        remove_dock_item(workspace, p)
+
+    # Now, load new region
+    window.current_path = path
+    window.reader = reader
+    window.presenters = [CochleogramPresenter(r, reader) for t in window.tile_collection.regions]
+    for p in window.presenters:
+        target = add_dock_item(workspace, p, 'help', CochleogramDockItem)
+
+
+################################################################################
+# 63x functions (i.e., cochleogram counts)
+################################################################################
+def open_63x_lif_file_for_HC_counts(window):
+    # Check for unsaved changes
+    if any(p.unsaved_changes for p in window.presenters):
+        q = 'There are unsaved changes. Your current analysis will be lost. Are you sure?'
+        button = question(None, 'Confirm action', q)
+        if button is None or button.text == 'No':
+            return
+
+    path = FileDialogEx.get_open_file_name(window, current_path=str(window.current_path))
+    if path:
+        load_63x_dataset(path, window, readers.LIFTileReader)
+
+
+def load_63x_dataset(path, window, reader_class=None):
+    path = Path(path)
+    if reader_class is None:
+        if path.suffix.lower() == '.lif':
+            reader_class = readers.LIFTileReader
+        else:
+            raise ValueError(f'Unrecognized format for {path}')
+
+    # First, make sure we can load the cochlea
+    reader = reader_class(path)
+    window.tile_collection = reader.load_tile_collection()
 
     # Remove existing cochlea
     workspace = window.find('dock_area')
     for p in window.presenters:
         remove_dock_item(workspace, p)
 
-    # Now, load new cochlea
+    # Now, show region collection
     window.current_path = path
     window.reader = reader
-    window.presenters = [Presenter(p, reader) for p in window.cochlea.pieces]
-    target = 'help'
+    window.presenters = [CellCountPresenter(t, reader) for t in window.tile_collection]
     for p in window.presenters:
-        try:
-            p.load_state()
-        except IOError:
-            pass
-        target = add_dock_item(workspace, p, target)
+        target = add_dock_item(workspace, p, 'help', TileDockItem)
 
 
-def add_dock_item(dock_area, presenter, target):
-    item = MPLDockItem(dock_area, name=f'dock_piece_{presenter.piece}', presenter=presenter)
+################################################################################
+# Supporting functions
+################################################################################
+def load_dataset(path, window, reader_class=None):
+    path = Path(path)
+    if '63x' in path.stem:
+        return load_63x_dataset(path, window, reader_class)
+    else:
+        return load_20x_dataset(path, window, reader_class)
+
+
+def add_dock_item(dock_area, presenter, target, dock_item_class):
+    item = dock_item_class(dock_area, name=f'dock_piece_{presenter.obj}', presenter=presenter)
     op = InsertTab(item=item.name, target=target)
     dock_area.update_layout(op)
     return item.name
@@ -155,7 +206,7 @@ def bind_focus(items, cb):
 
 enamldef ChannelConfigPopup(PopupView):
     attr presenter
-    attr display_apply
+    attr display_apply = False
 
     anchor = (0.5, 0.0)
     parent_anchor = (0.5, 1.0)
@@ -191,12 +242,91 @@ enamldef ChannelConfigPopup(PopupView):
                     presenter.set_channel_max_value(loop_item[0], high_value / 100, display_apply)
 
 
-enamldef MPLDockItem(DockItem): dock_item:
+enamldef TileDockItem(DockItem): dock_item:
+
+    title << '{}{}'.format(presenter.obj.source, '*' if presenter.unsaved_changes else '')
 
     attr presenter
     closable = False
 
+    initialized ::
+        bind_focus(container.children, canvas.set_focus)
+        deferred_call(canvas.set_focus)
+
+    initialized ::
+        bind_focus(container.children, canvas.set_focus)
+        deferred_call(canvas.set_focus)
+
+    Container: container:
+        constraints = [
+            vbox(
+                hbox(display_label, channels, display_as_label, display_mode,
+                     z_slice_number_label, z_slice),
+                hbox(spacer, load_analysis, save_analysis),
+                canvas,
+            ),
+            align('v_center', display_label, channels, display_as_label,
+                  display_mode, z_slice_number_label, z_slice),
+        ]
+
+        Label: display_label:
+            text = 'Display'
+
+        PushButton: channels:
+            text = 'Channels'
+            clicked ::
+                popup = ChannelConfigPopup(self, presenter=dock_item.presenter)
+                popup.show()
+
+        Label: display_as_label:
+            text = 'as'
+
+        ObjectCombo: display_mode:
+            items = ['projection', 'slice']
+            selected << presenter.current_artist.display_mode
+            selected ::
+                presenter.set_display_mode(selected)
+
+        Label: z_slice_number_label:
+            text = 'number'
+            enabled << display_mode.selected == 'slice'
+
+        Slider: z_slice:
+            enabled << display_mode.selected == 'slice'
+            tick_interval = 1
+            value << presenter.current_artist.z_slice
+            value ::
+                presenter.set_z_slice(value)
+            minimum << presenter.current_artist.z_slice_min
+            maximum << presenter.current_artist.z_slice_max
+
+        PushButton: load_analysis:
+            text = 'Load'
+            clicked ::
+                load_state(self, [presenter])
+
+        PushButton: save_analysis:
+            text = 'Save'
+            clicked ::
+                save_state(self, [presenter])
+
+        CochleogramCanvas: canvas:
+            figure << presenter.figure
+            toolbar_visible = False
+            initialized ::
+                deferred_call(bind, figure, presenter)
+
+
+enamldef CochleogramDockItem(DockItem): dock_item:
+
     title << 'Piece {}{}'.format(presenter.piece.piece, '*' if presenter.unsaved_changes else '')
+
+    attr presenter
+    closable = False
+
+    initialized ::
+        bind_focus(container.children, canvas.set_focus)
+        deferred_call(canvas.set_focus)
 
     initialized ::
         bind_focus(container.children, canvas.set_focus)
@@ -544,6 +674,7 @@ enamldef CochleagramWindow(MainWindow): window:
 
     attr reader
     attr cochlea
+    attr tile_collection
     attr presenters = []
     attr current_path = ''
 
@@ -554,7 +685,7 @@ enamldef CochleagramWindow(MainWindow): window:
                 text = 'Open processed dataset'
                 triggered ::
                     try:
-                        open_processed_dataset(window)
+                        open_20x_processed_dataset(window)
                     except IOError as e:
                         log.exception(e)
                         critical(window, 'Load', str(e))
@@ -564,6 +695,18 @@ enamldef CochleagramWindow(MainWindow): window:
                 triggered ::
                     try:
                         open_20x_lif_file(window)
+                    except IOError as e:
+                        log.exception(e)
+                        critical(window, 'Load', str(e))
+
+            Action:
+                separator = True
+
+            Action:
+                text = 'Count HCs in 63x LIF file\tCtrl+C'
+                triggered ::
+                    try:
+                        open_63x_lif_file_for_HC_counts(window)
                     except IOError as e:
                         log.exception(e)
                         critical(window, 'Load', str(e))

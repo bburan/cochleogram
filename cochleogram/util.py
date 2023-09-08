@@ -13,7 +13,6 @@ import pandas as pd
 from scipy import ndimage, optimize, signal
 
 
-
 def get_region(spline, start, end):
     x1, y1 = start
     x2, y2 = end
@@ -156,9 +155,11 @@ def load_lif(filename, piece, max_xy=4096, dtype='uint8'):
     zoom = min(1, max_xy / max(pixels[:2]))
     voxel_size[:2] /= zoom
 
-    n = min(max_xy, max(pixels[:2]))
 
-    shape = [n, n, stack.dims[2], stack.channels]
+    nx = min(max_xy, pixels[0])
+    ny = min(max_xy, pixels[1])
+
+    shape = [ny, nx, stack.dims[2], stack.channels]
     img = np.empty(shape, dtype=np.float32)
     for c in range(stack.channels):
         for z, s in enumerate(stack.get_iter_z(c=c)):
@@ -175,7 +176,13 @@ def load_lif(filename, piece, max_xy=4096, dtype='uint8'):
 
     channels = []
     for c in filename.stem.split('-')[2:]:
+        if c == '63x':
+            continue
         channels.append({'name': c})
+
+    # If the number of channels does not match what's in the filename, mark them as unknown.
+    if len(channels) != img.shape[-1]:
+        channels = [{'name': f'Unknown {c+1}'} for c in range(img.shape[-1])]
 
     # Note that all units should be in microns since this is the most logical
     # unit for a confocal analysis.

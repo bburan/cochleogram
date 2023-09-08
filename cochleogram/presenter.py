@@ -215,6 +215,7 @@ class ImagePlot(Atom):
     artist = Value()
     rectangle = Value()
     axes = Value()
+    auto_rotate = Bool(True)
     rotation_transform = Value()
     transform = Value()
 
@@ -315,7 +316,8 @@ class ImagePlot(Atom):
         self.artist.set_extent(extent)
         self.rectangle.set_bounds(xlb, ylb, xub-xlb, yub-ylb)
         t = self.tile.get_image_transform()
-        self.rotation_transform.set_matrix(t.get_matrix())
+        if self.auto_rotate:
+            self.rotation_transform.set_matrix(t.get_matrix())
         self.updated = True
 
     def contains(self, x, y):
@@ -331,13 +333,252 @@ class ImagePlot(Atom):
         self.channel_config[channel_name].max_value = max_value
 
 
-class Presenter(Atom):
+class BasePresenter(Atom):
 
-    # Interface to help read data
+    #: Interface to help read data
     reader = Value()
 
-    # Tile artists
+    #: Parent figure of the axes
+    figure = Typed(Figure)
+
+    #: Axes on which all artists will be rendered
+    axes = Typed(Axes)
+
+    #: Object being presented (instance of a class in cochleogram.model)
+    obj = Value()
+
+    #: State as saved to file (used for checking against present state to
+    #: determine if there are unsaved changes)
+    saved_state = Dict()
+
+    #: Flag indicating whether there are unsaved changes
+    unsaved_changes = Bool(False)
+
+    #: Flag indicating whether the figure needs to be redrawn
+    needs_redraw = Bool(False)
+
+    #: Currently selected tile artist
+    current_artist = Value()
+
+    #: Dictionary of all tile artists
     tile_artists = Dict()
+
+    #: Minimum z-slice across all tiles in image
+    z_min = Property()
+
+    #: Maximum z-slice across all tiles in image
+    z_max = Property()
+
+    #: Starting pan event
+    pan_event = Value(None)
+    pan_xlim = Value()
+    pan_ylim = Value()
+
+    #: True if we actually had a pan event. This allows us to distinguish
+    #: between clicks that select a tile vs. clicks that are intended to start
+    #: a pan.
+    pan_performed = Bool(False)
+
+    drag_event = Value(None)
+    drag_x = Value()
+    drag_y = Value()
+
+    ###################################################################################
+    # Code for handling events from Matplotlib
+    def motion(self, event):
+        if self.pan_event is not None:
+            self.motion_pan(event)
+        elif self.drag_event is not None:
+            self.motion_drag(event)
+
+    def motion_drag(self, event):
+        raise NotImplementedError
+
+    def start_pan(self, event):
+        self.pan_event = event
+        self.pan_performed = False
+        self.pan_xlim = self.axes.get_xlim()
+        self.pan_ylim = self.axes.get_ylim()
+
+    def motion_pan(self, event):
+        if event.xdata is None:
+            return
+        if self.pan_event is None:
+            return
+        dx = event.xdata - self.pan_event.xdata
+        dy = event.ydata - self.pan_event.ydata
+        self.pan_xlim -= dx
+        self.pan_ylim -= dy
+        self.axes.set_xlim(self.pan_xlim)
+        self.axes.set_ylim(self.pan_ylim)
+        self.pan_performed = True
+        self.redraw()
+
+    def end_pan(self, event):
+        self.pan_event = None
+
+    def button_release(self, event):
+        if event.button == MouseButton.LEFT:
+            self.left_button_release(event)
+        elif event.button == MouseButton.RIGHT:
+            self.right_button_release(event)
+
+    def left_button_release(self, event):
+        self.end_pan(event)
+
+    def right_button_release(self, event):
+        pass
+
+    def button_press(self, event):
+        if event.button == MouseButton.LEFT:
+            self.left_button_press(event)
+        elif event.button == MouseButton.RIGHT:
+            self.right_button_press(event)
+
+    def left_button_press(self, event):
+        if event.xdata is not None:
+            self.start_pan(event)
+
+    def right_button_press(self, event):
+        pass
+
+    def key_press(self, event):
+        raise NotImplementedError
+
+    def scroll(self, event):
+        """
+        This zooms in without shifting the center point
+        """
+        if event.xdata is None:
+            return
+
+        base_scale = 1.1
+
+        cur_xlim = self.axes.get_xlim()
+        cur_ylim = self.axes.get_ylim()
+        cur_xrange = cur_xlim[1] - cur_xlim[0]
+        cur_yrange = cur_ylim[1] - cur_ylim[0]
+
+        xdata = event.xdata  # get event x location
+        ydata = event.ydata  # get event y location
+        xfrac = (xdata - cur_xlim[0]) / cur_xrange
+        yfrac = (ydata - cur_ylim[0]) / cur_yrange
+
+        if event.button == "up":
+            scale_factor = 1 / base_scale
+        elif event.button == "down":
+            scale_factor = base_scale
+        else:
+            scale_factor = 1
+
+        # set new limits
+        new_xrange = cur_xrange * scale_factor
+        new_xlim = [xdata - xfrac * new_xrange, xdata + (1 - xfrac) * new_xrange]
+
+        new_yrange = cur_yrange * scale_factor
+        new_ylim = [ydata - yfrac * new_yrange, ydata + (1 - yfrac) * new_yrange]
+        self.axes.set_xlim(new_xlim)
+        self.axes.set_ylim(new_ylim)
+        self.redraw()
+
+    def _get_z_min(self):
+        return min(a.z_slice_min for a in self.tile_artists.values())
+
+    def _get_z_max(self):
+        return min(a.z_slice_max for a in self.tile_artists.values())
+
+    def _default_figure(self):
+        return Figure()
+
+    def _default_axes(self):
+        return self.figure.add_axes([0, 0, 1, 1])
+
+    def save_state(self):
+        state = self.get_full_state()
+        self.reader.save_state(self.obj, state)
+        self.saved_state = state
+        self.update()
+
+    def load_state(self):
+        state = self.reader.load_state(self.obj)
+        self.obj.set_state(state['data'])
+        self.saved_state = state
+        self.update()
+
+    def update(self, event=None):
+        self.check_for_changes()
+        self.needs_redraw = True
+        deferred_call(self.redraw_if_needed)
+
+    def redraw(self):
+        self.figure.canvas.draw()
+
+    def redraw_if_needed(self):
+        if self.needs_redraw:
+            self.redraw()
+            self.needs_redraw = False
+
+    def check_for_changes(self):
+        raise NotImplementedError
+
+    def set_display_mode(self, display_mode, all_tiles=False):
+        if all_tiles:
+            for artist in self.tile_artists.values():
+                artist.display_mode = display_mode
+        elif self.current_artist is not None:
+            self.current_artist.display_mode = display_mode
+
+    def set_channel_visible(self, channel_name, visible, all_tiles=False):
+        if all_tiles:
+            for artist in self.tile_artists.values():
+                artist.set_channel_visible(channel_name, visible)
+        elif self.current_artist is not None:
+            self.current_artist.set_channel_visible(channel_name, visible)
+
+    def set_channel_min_value(self, channel_name, low_value, all_tiles=False):
+        if all_tiles:
+            for artist in self.tile_artists.values():
+                artist.set_channel_min_value(channel_name, low_value)
+        elif self.current_artist is not None:
+            self.current_artist.set_channel_min_value(channel_name, low_value)
+
+    def set_channel_max_value(self, channel_name, high_value, all_tiles=False):
+        if all_tiles:
+            for artist in self.tile_artists.values():
+                artist.set_channel_max_value(channel_name, high_value)
+        elif self.current_artist is not None:
+            self.current_artist.set_channel_max_value(channel_name, high_value)
+
+    def set_z_slice(self, z_slice, all_tiles=False):
+        if all_tiles:
+            for artist in self.tile_artists.values():
+                artist.z_slice = z_slice
+        elif self.current_artist is not None:
+            self.current_artist.z_slice = z_slice
+
+
+class CellCountPresenter(BasePresenter):
+
+    def __init__(self, obj, reader, *args, **kwargs):
+        self.obj = obj
+        self.reader = reader
+        self.current_artist = ImagePlot(self.axes, obj, auto_rotate=False)
+        self.current_artist.observe('updated', self.update)
+        self.tile_artists = {obj.source: obj}
+
+        self.axes.axis('equal')
+        self.axes.axis(self.obj.get_image_extent())
+
+    def check_for_changes(self):
+        pass
+
+    def key_press(self, event):
+        pass
+
+
+class CochleogramPresenter(BasePresenter):
+
+    # Tile artists
     current_artist_index = Value()
     current_artist = Value()
 
@@ -345,10 +586,6 @@ class Presenter(Atom):
     point_artists = Dict()
     current_spiral_artist = Value()
     current_cells_artist = Value()
-
-    figure = Typed(Figure)
-    axes = Typed(Axes)
-    piece = Typed(Piece)
 
     highlight_selected = Bool(False)
     alpha_selected = Float(0.50)
@@ -359,49 +596,23 @@ class Presenter(Atom):
     cells = Enum("IHC", "OHC1", "OHC2", "OHC3", "Extra")
     tool = Enum("tile", "spiral", "exclude", "cells")
 
-    pan_event = Value()
-    pan_xlim = Value()
-    pan_ylim = Value()
-
-    #: True if we actually had a pan event. This allows us to distinguish
-    #: between clicks that select a tile vs. clicks that are intended to start
-    #: a pan.
-    pan_performed = Bool(False)
-
-    drag_event = Value()
-    drag_x = Value()
-    drag_y = Value()
-
     spiral_empty = Bool(True)
     spiral_ready = Bool(False)
     cells_empty = Bool(True)
 
-    unsaved_changes = Bool(False)
-    needs_redraw = Bool(False)
-    saved_state = Dict()
-
-    z_min = Property()
-    z_max = Property()
-
-    def _get_z_min(self):
-        return min(a.z_slice_min for a in self.tile_artists.values())
-
-    def _get_z_max(self):
-        return min(a.z_slice_max for a in self.tile_artists.values())
-
-    def __init__(self, piece, reader, *args, **kwargs):
+    def __init__(self, obj, reader, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.piece = piece
+        self.obj = obj
         self.reader = reader
         self.tile_artists = {
-            t.source: ImagePlot(self.axes, t) for t in self.piece.tiles
+            t.source: ImagePlot(self.axes, t) for t in self.obj.tiles
         }
         for artist in self.tile_artists.values():
             artist.observe('updated', self.update)
         self.current_artist_index = 0
         for key in ('IHC', 'OHC1', 'OHC2', 'OHC3', 'Extra'):
-            cells = PointPlot(self.axes, self.piece.cells[key], name=key)
-            spiral = LinePlot(self.axes, self.piece.spirals[key], name=key)
+            cells = PointPlot(self.axes, self.obj.cells[key], name=key)
+            spiral = LinePlot(self.axes, self.obj.spirals[key], name=key)
             cells.observe('updated', self.update)
             spiral.observe('updated', self.update)
             self.point_artists[key, 'cells'] = cells
@@ -410,7 +621,7 @@ class Presenter(Atom):
         # This is necessary because `imshow` will override some axis settings.
         # We need to set them back to what we want.
         self.axes.axis('equal')
-        self.axes.axis(self.piece.get_image_extent())
+        self.axes.axis(self.obj.get_image_extent())
         self.saved_state = self.get_full_state()
         self.drag_event = None
 
@@ -423,17 +634,6 @@ class Presenter(Atom):
         unsaved = self.get_full_state()['data']
         unsaved.pop('copied_from', None)
         self.unsaved_changes = saved != unsaved
-
-    def update(self, event=None):
-        self.check_for_changes()
-        self.needs_redraw = True
-        deferred_call(self.redraw_if_needed)
-
-    def _default_figure(self):
-        return Figure()
-
-    def _default_axes(self):
-        return self.figure.add_axes([0, 0, 1, 1])
 
     def _observe_current_artist_index(self, event):
         self.current_artist = list(self.tile_artists.values())[self.current_artist_index]
@@ -479,44 +679,44 @@ class Presenter(Atom):
             self.tool = tool
 
     def action_auto_align_tiles(self):
-        self.piece.align_tiles()
+        self.obj.align_tiles()
 
     def action_guess_cells(self, width, spacing, channel):
-        n = self.piece.guess_cells(self.cells, width, spacing, channel)
+        n = self.obj.guess_cells(self.cells, width, spacing, channel)
         self.set_interaction_mode(None, 'cells')
         return n
 
     def action_clear_cells(self):
-        self.piece.clear_cells(self.cells)
+        self.obj.clear_cells(self.cells)
         self.set_interaction_mode(None, 'cells')
 
     def action_clear_spiral(self):
-        self.piece.clear_spiral(self.cells)
+        self.obj.clear_spiral(self.cells)
         self.set_interaction_mode(None, 'spiral')
 
     def action_clone_spiral(self, to_spiral, distance):
-        xn, yn = self.piece.spirals[self.cells].expand_nodes(distance)
-        self.piece.spirals[to_spiral].set_nodes(xn, yn)
+        xn, yn = self.obj.spirals[self.cells].expand_nodes(distance)
+        self.obj.spirals[to_spiral].set_nodes(xn, yn)
 
     def action_copy_exclusion(self, to_spiral):
         if not self.point_artists[to_spiral, 'spiral'].has_spline:
             raise ValueError(f'Must create spiral for {to_spiral} first')
-        for s, e in self.piece.spirals[self.cells].exclude:
-            self.piece.spirals[to_spiral].add_exclude(s, e)
+        for s, e in self.obj.spirals[self.cells].exclude:
+            self.obj.spirals[to_spiral].add_exclude(s, e)
 
     def action_merge_exclusion(self, *spirals):
         exclude = []
         for spiral in spirals:
             if not self.point_artists[spiral, 'spiral'].has_spline:
-                raise ValueError(f'Must create spiral for {to_spiral} first')
-            exclude.extend(self.piece.spirals[spiral].exclude)
+                raise ValueError(f'Must create spiral for {spiral} first')
+            exclude.extend(self.obj.spirals[spiral].exclude)
         for spiral in spirals:
-            self.piece.spirals[spiral].exclude = exclude
-            self.piece.spirals[spiral].simplify_exclude()
+            self.obj.spirals[spiral].exclude = exclude
+            self.obj.spirals[spiral].simplify_exclude()
 
     def action_simplify_exclusion(self, *spirals):
         for spiral in spirals:
-            self.piece.spirals[spiral].simplify_exclude()
+            self.obj.spirals[spiral].simplify_exclude()
 
     def key_press(self, event):
         key = event.key.lower()
@@ -577,11 +777,14 @@ class Presenter(Atom):
             self.axes.set_ylim(lb + shift, ub + shift)
         self.redraw()
 
-    def button_press(self, event):
-        if event.button == MouseButton.LEFT and event.xdata is not None:
-            self.start_pan(event)
-        elif self.tool != 'tile':
+    def right_button_press(self, event):
+        if self.tool != 'tile':
             self.button_press_point_plot(event)
+
+    def left_button_release(self, event):
+        if not self.pan_performed:
+            self.button_release_tile(event)
+        super().left_button_release(event)
 
     def button_release_tile(self, event):
         if event.button == MouseButton.LEFT and event.xdata is not None:
@@ -602,7 +805,7 @@ class Presenter(Atom):
                 self.point_artists[self.cells, 'spiral'].set_origin(event.xdata, event.ydata)
         elif event.key == "shift" and event.xdata is not None:
             if self.tool == 'cells':
-                self.point_artists[self.cells, 'cells'].remove_point(event.xdata, event.ydata)
+                self.point_artists[self.cells, 'cells'].remove_point(event.xdaa, event.ydata)
             elif self.tool == 'spiral':
                 self.point_artists[self.cells, 'spiral'].remove_point(event.xdata, event.ydata)
             elif self.tool == 'exclude':
@@ -634,35 +837,6 @@ class Presenter(Atom):
             if self.tool == 'tile':
                 self.drag_event = None
 
-    def motion(self, event):
-        if self.pan_event is not None:
-            self.motion_pan(event)
-        elif self.drag_event is not None:
-            self.motion_drag(event)
-
-    def start_pan(self, event):
-        self.pan_event = event
-        self.pan_performed = False
-        self.pan_xlim = self.axes.get_xlim()
-        self.pan_ylim = self.axes.get_ylim()
-
-    def motion_pan(self, event):
-        if event.xdata is None:
-            return
-        if self.pan_event is None:
-            return
-        dx = event.xdata - self.pan_event.xdata
-        dy = event.ydata - self.pan_event.ydata
-        self.pan_xlim -= dx
-        self.pan_ylim -= dy
-        self.axes.set_xlim(self.pan_xlim)
-        self.axes.set_ylim(self.pan_ylim)
-        self.pan_performed = True
-        self.redraw()
-
-    def end_pan(self, event):
-        self.pan_event = None
-
     def start_drag_exclude(self, event):
         self.drag_event = event
         self.current_spiral_artist.start_exclude(event.xdata, event.ydata)
@@ -689,77 +863,6 @@ class Presenter(Atom):
     def end_drag_tile(self, event):
         self.drag_event = None
 
-    def scroll(self, event):
-        """
-        This zooms in without shifting the center point
-        """
-        if event.xdata is None:
-            return
-
-        base_scale = 1.1
-
-        cur_xlim = self.axes.get_xlim()
-        cur_ylim = self.axes.get_ylim()
-        cur_xrange = cur_xlim[1] - cur_xlim[0]
-        cur_yrange = cur_ylim[1] - cur_ylim[0]
-
-        xdata = event.xdata  # get event x location
-        ydata = event.ydata  # get event y location
-        xfrac = (xdata - cur_xlim[0]) / cur_xrange
-        yfrac = (ydata - cur_ylim[0]) / cur_yrange
-
-        if event.button == "up":
-            scale_factor = 1 / base_scale
-        elif event.button == "down":
-            scale_factor = base_scale
-        else:
-            scale_factor = 1
-
-        # set new limits
-        new_xrange = cur_xrange * scale_factor
-        new_xlim = [xdata - xfrac * new_xrange, xdata + (1 - xfrac) * new_xrange]
-
-        new_yrange = cur_yrange * scale_factor
-        new_ylim = [ydata - yfrac * new_yrange, ydata + (1 - yfrac) * new_yrange]
-        self.axes.set_xlim(new_xlim)
-        self.axes.set_ylim(new_ylim)
-        self.redraw()
-
-    def set_display_mode(self, display_mode, all_tiles=False):
-        if all_tiles:
-            for artist in self.tile_artists.values():
-                artist.display_mode = display_mode
-        elif self.current_artist is not None:
-            self.current_artist.display_mode = display_mode
-
-    def set_channel_visible(self, channel_name, visible, all_tiles=False):
-        if all_tiles:
-            for artist in self.tile_artists.values():
-                artist.set_channel_visible(channel_name, visible)
-        elif self.current_artist is not None:
-            self.current_artist.set_channel_visible(channel_name, visible)
-
-    def set_channel_min_value(self, channel_name, low_value, all_tiles=False):
-        if all_tiles:
-            for artist in self.tile_artists.values():
-                artist.set_channel_min_value(channel_name, low_value)
-        elif self.current_artist is not None:
-            self.current_artist.set_channel_min_value(channel_name, low_value)
-
-    def set_channel_max_value(self, channel_name, high_value, all_tiles=False):
-        if all_tiles:
-            for artist in self.tile_artists.values():
-                artist.set_channel_max_value(channel_name, high_value)
-        elif self.current_artist is not None:
-            self.current_artist.set_channel_max_value(channel_name, high_value)
-
-    def set_z_slice(self, z_slice, all_tiles=False):
-        if all_tiles:
-            for artist in self.tile_artists.values():
-                artist.z_slice = z_slice
-        elif self.current_artist is not None:
-            self.current_artist.z_slice = z_slice
-
     def get_state(self):
         artist_states = {k: a.get_state() for k, a in self.tile_artists.items()}
         point_artist_states = {':'.join(k): a.get_state() for k, a in self.point_artists.items()}
@@ -779,26 +882,6 @@ class Presenter(Atom):
 
     def get_full_state(self):
         return deepcopy({
-            "data": self.piece.get_state(),
+            "data": self.obj.get_state(),
             "view": self.get_state(),
         })
-
-    def save_state(self):
-        state = self.get_full_state()
-        self.reader.save_state(self.piece, state)
-        self.saved_state = state
-        self.update()
-
-    def load_state(self):
-        state = self.reader.load_state(self.piece)
-        self.piece.set_state(state['data'])
-        self.saved_state = state
-        self.update()
-
-    def redraw(self):
-        self.figure.canvas.draw()
-
-    def redraw_if_needed(self):
-        if self.needs_redraw:
-            self.redraw()
-            self.needs_redraw = False

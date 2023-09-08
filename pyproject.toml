@@ -12,7 +12,7 @@ maintainers = [
 ]
 dependencies = [
     "atom",
-    "enaml[qt5-pyqt]",
+    "enaml[qt6-pyside]",
     "matplotlib",
     "numpy",
     "raster_geometry",

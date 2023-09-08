@@ -22,8 +22,13 @@ from cochleogram import util
 CHANNEL_CONFIG = {
     'CtBP2': { 'display_color': 'red'},
     'MyosinVIIa': {'display_color': 'blue'},
+    'GluR2': {'display_color': 'green'},
+    'GlueR2': {'display_color': 'green'},
     'PMT': {'display_color': 'white'},
     'DAPI': {'display_color': 'white'},
+    'Unknown 1': {'display_color': 'red'},
+    'Unknown 2': {'display_color': 'green'},
+    'Unknown 3': {'display_color': 'blue'},
 }
 
 
@@ -727,3 +732,12 @@ class Cochlea:
                 info[row['frequency']] = row
 
         return info
+
+
+class TileCollection:
+
+    def __init__(self, tiles):
+        self.tiles = tiles
+
+    def __iter__(self):
+        yield from self.tiles
