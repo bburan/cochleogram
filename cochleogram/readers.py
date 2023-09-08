@@ -34,12 +34,17 @@ class Reader20x(BaseReader):
     def __init__(self, path):
         self.path = Path(path)
 
-    def load_cochlea(self, load_analysis=False):
+    def load_cochlea(self, load_analysis=True,
+                     raise_load_analysis_error=False):
         cochlea = self._load_cochlea()
         if load_analysis:
             for piece in cochlea.pieces:
-                state = self.load_state(piece)
-                piece.set_state(state['data'])
+                try:
+                    state = self.load_state(piece)
+                    piece.set_state(state['data'])
+                except IOError:
+                    if raise_load_analysis_error:
+                        raise
         return cochlea
 
     def _load_cochlea(self):
@@ -203,12 +208,17 @@ class TileReader(BaseReader):
         self.path = Path(path)
         self.pattern = re.compile(pattern)
 
-    def load_tile_collection(self, load_analysis=False):
+    def load_tile_collection(self, load_analysis=True,
+                             raise_load_analysis_error=False):
         tile_collection = self._load_tile_collection()
         if load_analysis:
             for tile in tile_collection.tiles:
-                state = self.load_state(tile)
-                tile.set_state(state['data'])
+                try:
+                    state = self.load_state(tile)
+                    tile.set_state(state['data'])
+                except IOError:
+                    if raise_load_analysis_error:
+                        raise
         return tile_collection
 
     def _load_tile_collection(self):
