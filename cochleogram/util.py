@@ -443,6 +443,14 @@ def _find_ims_converter():
     return str(next(path.glob('**/ImarisConvert.exe')))
 
 
+#def find_cells_watershed(img, debug=False):
+#    if debug:
+#        figure, axes = plt.a
+#    img_gray = img.mean(axis=-1)
+#    elevation = sobel(img_gray)
+
+
+
 def lif_to_ims(filename, reprocess=False, cb=None):
     filename = Path(filename)
     converter = _find_ims_converter()
@@ -457,3 +465,24 @@ def lif_to_ims(filename, reprocess=False, cb=None):
         subprocess.check_output(args)
         progress = int((j + 1) / n_stacks * 100)
         cb(progress)
+
+
+def guess_cells(tile, spiral, width, spacing, channel):
+    log.info('Find cells within %fum of spiral and spaced %fum on channel %s', width, spacing, channel)
+    x, y = spiral.interpolate(resolution=0.0001)
+    i = tile.map(x, y, channel, width=width)
+    xn, yn = find_nuclei(x, y, i, spacing=spacing)
+
+    # Map to centroid
+    xni, yni = tile.to_indices(xn, yn)
+
+    image = tile.get_image(channel).max(axis=-1)
+    x_radius = tile.to_indices_delta(width, 'x')
+    y_radius = tile.to_indices_delta(width, 'y')
+    log.info('Searching for centroid within %ix%i pixels of spiral', x_radius, y_radius)
+    xnic, ynic = find_centroid(xni, yni, image, x_radius, y_radius, 4)
+    xnc, ync = tile.to_coords(xnic, ynic)
+    log.info('Shifted points up to %.0f x %.0f microns',
+                np.max(np.abs(xnc - xn)), np.max(np.abs(ync - yn)))
+    return xnc, ync
+

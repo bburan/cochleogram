@@ -483,15 +483,34 @@ class Tile(Atom):
         self.extent = [dx, dx + width, dy, dy + height] + extent[4:]
 
 
-class Piece:
+class CellAnalysis:
 
-    def __init__(self, tiles, piece, copied_from=None, region=None):
-        self.tiles = tiles
-        self.piece = piece
-        self.copied_from = copied_from
+    def __init__(self):
         keys = 'IHC', 'OHC1', 'OHC2', 'OHC3', 'Extra'
         self.spirals = {k: Points() for k in keys}
         self.cells = {k: Points() for k in keys}
+
+    def guess_cells(self, cell_type, width, spacing, channel):
+        tile = self.merge_tiles()
+        x, y = util.guess_cells(tile, self.spirals[cell_type], width, spacing,
+                                channel)
+        self.cells[cell_type].set_nodes(x, y)
+        return len(x)
+
+    def clear_cells(self, cell_type):
+        self.cells[cell_type].clear()
+
+    def clear_spiral(self, cell_type):
+        self.spirals[cell_type].clear()
+
+
+class Piece(CellAnalysis):
+
+    def __init__(self, tiles, piece, copied_from=None, region=None):
+        super().__init__()
+        self.tiles = tiles
+        self.piece = piece
+        self.copied_from = copied_from
         self.region = region
 
     @property
@@ -583,34 +602,6 @@ class Piece:
             v.set_state(state['cells'][k])
         for tile in self.tiles:
             tile.set_state(state['tiles'][tile.source])
-
-    def guess_cells(self, cell_type, width, spacing, channel):
-        log.info('Finding %s assuming within %f um of spiral and spaced %f microns on channel %s',
-                 cell_type, width, spacing, channel)
-        tile = self.merge_tiles()
-        x, y = self.spirals[cell_type].interpolate(resolution=0.0001)
-        i = tile.map(x, y, channel, width=width)
-        xn, yn = util.find_nuclei(x, y, i, spacing=spacing)
-
-        # Map to centroid
-        xni, yni = tile.to_indices(xn, yn)
-
-        image = tile.get_image(channel).max(axis=-1)
-        x_radius = tile.to_indices_delta(width, 'x')
-        y_radius = tile.to_indices_delta(width, 'y')
-        log.info('Searching for centroid within %ix%i pixels of spiral', x_radius, y_radius)
-        xnic, ynic = util.find_centroid(xni, yni, image, x_radius, y_radius, 4)
-        xnc, ync = tile.to_coords(xnic, ynic)
-        log.info('Shifted points up to %.0f x %.0f microns',
-                 np.max(np.abs(xnc - xn)), np.max(np.abs(ync - yn)))
-        self.cells[cell_type].set_nodes(xnc, ync)
-        return len(xnc)
-
-    def clear_cells(self, cell_type):
-        self.cells[cell_type].clear()
-
-    def clear_spiral(self, cell_type):
-        self.spirals[cell_type].clear()
 
     def align_tiles(self, alignment_channel='MyosinVIIa'):
         # First, figure out the order in which we should work on the alignment.
@@ -734,7 +725,26 @@ class Cochlea:
         return info
 
 
-class TileCollection:
+class TileAnalysis(CellAnalysis):
+
+    def __init__(self, tile, source):
+        super().__init__()
+        self.tile = tile
+        self.source = source
+
+    def merge_tiles(self):
+        return self.tile
+
+    def get_image_extent(self):
+        return self.tile.get_image_extent()
+
+    @property
+    def channel_names(self):
+        # We assume that each tile has the same set of channels
+        return self.tile.channel_names
+
+
+class TileAnalysisCollection:
 
     def __init__(self, tiles):
         self.tiles = tiles

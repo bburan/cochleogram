@@ -188,6 +188,79 @@ def load_state(parent, presenters):
 CELLS = ['IHC', 'OHC1', 'OHC2', 'OHC3', 'Extra']
 
 
+################################################################################
+# Shared widgets
+################################################################################
+enamldef PBActionClearSpiral(PushButton):
+    attr presenter
+    attr is_copy = False
+
+    text = 'Clear spiral'
+    enabled << (presenter.current_spiral_artist is not None) \
+        and presenter.current_spiral_artist.has_nodes and not is_copy
+    clicked ::
+        button = question(self, 'Confirm action', 'Are you sure you want to remove the current spiral?')
+        if button is not None and button.text == 'Yes':
+            presenter.action_clear_spiral()
+
+
+enamldef PBActionClearCells(PushButton):
+    attr presenter
+    attr is_copy = False
+
+    text = 'Clear all cells'
+    enabled << (presenter.current_cells_artist is not None) \
+        and presenter.current_cells_artist.has_nodes \
+        and not is_copy
+    clicked ::
+        button = question(self, 'Confirm action', 'Are you sure you want to remove the current cells?')
+        if button is not None and button.text == 'Yes':
+            try:
+                presenter.action_clear_cells()
+            except Exception as e:
+                log.exception(e)
+                information(self, 'Error', str(e))
+
+
+enamldef ActionGuessCells(HGroup):
+    attr presenter
+    attr is_copy = False
+
+    padding = 0
+    align_widths = False
+    share_layout = True
+    trailing_spacer = spacer(0)
+    enabled << (presenter.current_spiral_artist is not None) \
+        and presenter.current_spiral_artist.has_spline
+    Label:
+        text = 'Find cells within'
+    FloatField: guess_width:
+        value = 2.5
+    Label:
+        text = 'μm of spline with a spacing of'
+    FloatField: guess_spacing:
+        value = 5.0
+    Label:
+        text = 'μm using'
+    ObjectCombo: guess_channel:
+        items = presenter.obj.channel_names
+        selected << items[0]
+
+    PushButton:
+        text = 'update'
+        clicked ::
+            button = question(self, 'Confirm action', f'Are you sure you want to overwrite the existing cells?')
+            if button is not None and button.text == 'Yes':
+                try:
+                    n = presenter.action_guess_cells(guess_width.value,
+                                                     guess_spacing.value,
+                                                     guess_channel.selected)
+                    information(self, 'Info', f'Found {n} cells')
+                except Exception as e:
+                    log.exception(e)
+                    information(self, 'Error', str(e))
+
+
 class CochleogramCanvas(MPLCanvas):
 
     def set_focus(self, event=None):
@@ -262,11 +335,18 @@ enamldef TileDockItem(DockItem): dock_item:
             vbox(
                 hbox(display_label, channels, display_as_label, display_mode,
                      z_slice_number_label, z_slice),
-                hbox(spacer, load_analysis, save_analysis),
+                hbox(tool_label, mode_buttons, spacer, load_analysis, save_analysis),
+                hbox(action_label, action_clear_spiral, action_clear_cells,
+                     spacer, spacing=0),
+                hbox(action_guess_cells, spacer, spacing=0),
                 canvas,
             ),
             align('v_center', display_label, channels, display_as_label,
                   display_mode, z_slice_number_label, z_slice),
+            align('v_center', tool_label, mode_buttons),
+            align('v_center', action_label, action_clear_spiral, action_clear_cells),
+            align('left', tool_label, display_label, action_label),
+            align('left', channels, mode_buttons, action_clear_spiral, action_guess_cells),
         ]
 
         Label: display_label:
@@ -309,6 +389,48 @@ enamldef TileDockItem(DockItem): dock_item:
             text = 'Save'
             clicked ::
                 save_state(self, [presenter])
+
+        ButtonGroup: tool_group:
+            pass
+
+        Label: tool_label:
+            text = 'Tool'
+
+        HGroup: mode_buttons:
+            padding = 0
+            spacing = 0
+            align_widths = False
+            trailing_spacer = spacer(0)
+
+            ObjectCombo:
+                items << CELLS
+                selected := presenter.cells
+
+            Looper:
+                iterable = ['spiral', 'cells']
+                PushButton:
+                    icon = load_icon(loop_item)
+                    icon_size = (20, 20)
+                    tool_tip = loop_item
+                    enabled << not (presenter.cells == 'Extra' and loop_item != 'cells')
+                    group = tool_group
+                    checkable = True
+                    checked << loop_item == presenter.tool
+                    toggled ::
+                        if self.checked:
+                            presenter.tool = loop_item
+
+        Label: action_label:
+            text = 'Actions'
+
+        PBActionClearSpiral: action_clear_spiral:
+            presenter = dock_item.presenter
+
+        PBActionClearCells: action_clear_cells:
+            presenter = dock_item.presenter
+
+        ActionGuessCells: action_guess_cells:
+            presenter = dock_item.presenter
 
         CochleogramCanvas: canvas:
             figure << presenter.figure
@@ -406,9 +528,6 @@ enamldef CochleogramDockItem(DockItem): dock_item:
             checkable = True
             checked := presenter.highlight_selected
 
-        ButtonGroup: mode_group:
-            pass
-
         ButtonGroup: tool_group:
             pass
 
@@ -461,29 +580,17 @@ enamldef CochleogramDockItem(DockItem): dock_item:
                 if button is not None and button.text == 'Yes':
                     presenter.action_auto_align_tiles()
 
-        PushButton: action_clear_spiral:
-            text = 'Clear spiral'
-            enabled << (presenter.current_spiral_artist is not None) \
-                and presenter.current_spiral_artist.has_nodes \
-                and not presenter.piece.is_copy
-            clicked ::
-                button = question(self, 'Confirm action', 'Are you sure you want to remove the current spiral?')
-                if button is not None and button.text == 'Yes':
-                    presenter.action_clear_spiral()
+        PBActionClearSpiral: action_clear_spiral:
+            presenter = dock_item.presenter
+            is_copy = dock_item.presenter.piece_is_copy
 
-        PushButton: action_clear_cells:
-            text = 'Clear all cells'
-            enabled << (presenter.current_cells_artist is not None) \
-                and presenter.current_cells_artist.has_nodes \
-                and not presenter.piece.is_copy
-            clicked ::
-                button = question(self, 'Confirm action', 'Are you sure you want to remove the current cells?')
-                if button is not None and button.text == 'Yes':
-                    try:
-                        presenter.action_clear_cells()
-                    except Exception as e:
-                        log.exception(e)
-                        information(self, 'Error', str(e))
+        PBActionClearCells: action_clear_cells:
+            presenter = dock_item.presenter
+            is_copy = dock_item.presenter.piece_is_copy
+
+        ActionGuessCells: action_guess_cells:
+            presenter = dock_item.presenter
+            is_copy = dock_item.presenter.piece_is_copy
 
         PushButton: action_simplify_exclusions:
             text = 'Simplify exclusions'
@@ -531,41 +638,6 @@ enamldef CochleogramDockItem(DockItem): dock_item:
             text = 'Save'
             clicked ::
                 save_state(self, [presenter])
-
-        HGroup: action_guess_cells:
-            padding = 0
-            align_widths = False
-            share_layout = True
-            trailing_spacer = spacer(0)
-            enabled << (presenter.current_spiral_artist is not None) \
-                and presenter.current_spiral_artist.has_spline
-            Label:
-                text = 'Find cells within'
-            FloatField: guess_width:
-                value = 2.5
-            Label:
-                text = 'μm of spline with a spacing of'
-            FloatField: guess_spacing:
-                value = 5.0
-            Label:
-                text = 'μm using'
-            ObjectCombo: guess_channel:
-                items = presenter.piece.channel_names
-                selected << items[0]
-
-            PushButton:
-                text = 'update'
-                clicked ::
-                    button = question(self, 'Confirm action', f'Are you sure you want to overwrite the existing cells?')
-                    if button is not None and button.text == 'Yes':
-                        try:
-                            n = presenter.action_guess_cells(guess_width.value,
-                                                            guess_spacing.value,
-                                                            guess_channel.selected)
-                            information(self, 'Info', f'Found {n} cells')
-                        except Exception as e:
-                            log.exception(e)
-                            information(self, 'Error', str(e))
 
         HGroup: action_copy_exclusion:
             padding = 0

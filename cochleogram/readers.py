@@ -230,11 +230,12 @@ class LIFTileReader(TileReader):
 
     def _load_tile_collection(self):
         tiles = [self.load_tile(r) for r in self.list_tiles()]
-        return model.TileCollection(tiles=tiles)
+        return model.TileAnalysisCollection(tiles=tiles)
 
     def load_tile(self, tile_name):
         info, img = util.load_lif(self.path, tile_name)
-        return model.Tile(info, img, source=tile_name)
+        tile = model.Tile(info, img, source=tile_name)
+        return model.TileAnalysis(tile, source=tile_name)
 
     def list_tiles(self):
         tile_names = {}

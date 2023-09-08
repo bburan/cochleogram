@@ -335,6 +335,10 @@ class ImagePlot(Atom):
 
 class BasePresenter(Atom):
 
+
+    cells = Str()
+    tool = Str()
+
     #: Interface to help read data
     reader = Value()
 
@@ -382,6 +386,11 @@ class BasePresenter(Atom):
     drag_event = Value(None)
     drag_x = Value()
     drag_y = Value()
+
+    # For spirals and cells
+    point_artists = Dict()
+    current_spiral_artist = Value()
+    current_cells_artist = Value()
 
     ###################################################################################
     # Code for handling events from Matplotlib
@@ -556,15 +565,66 @@ class BasePresenter(Atom):
         elif self.current_artist is not None:
             self.current_artist.z_slice = z_slice
 
+    @observe('cells', 'tool')
+    def _update_plots(self, event=None):
+        for artist in self.point_artists.values():
+            artist.visible = False
+            if hasattr(artist, 'exclude_visible'):
+                artist.exclude_visible = False
+        if self.tool == 'tile':
+            self.current_spiral_artist = None
+            self.current_cells_artist = None
+        else:
+            self.current_spiral_artist = self.point_artists[self.cells, 'spiral']
+            self.current_cells_artist = self.point_artists[self.cells, 'cells']
+            self.current_spiral_artist.exclude_visible = True
+            if self.tool in ('spiral', 'exclude'):
+                self.current_spiral_artist.visible = True
+            else:
+                self.current_cells_artist.visible = True
+
+    def action_guess_cells(self, width, spacing, channel):
+        n = self.obj.guess_cells(self.cells, width, spacing, channel)
+        self.set_interaction_mode(None, 'cells')
+        return n
+
+    def action_clear_cells(self):
+        self.obj.clear_cells(self.cells)
+        self.set_interaction_mode(None, 'cells')
+
+    def action_clear_spiral(self):
+        self.obj.clear_spiral(self.cells)
+        self.set_interaction_mode(None, 'spiral')
+
+    def set_interaction_mode(self, cells=None, tool=None):
+        if cells is not None:
+            self.cells = cells
+        if tool is not None:
+            self.tool = tool
+
 
 class CellCountPresenter(BasePresenter):
+
+    #: Cells being marked
+    cells = Enum("IHC", "OHC1", "OHC2", "OHC3", "Extra")
+
+    #: Current tool
+    tool = Enum("spiral", "cells")
 
     def __init__(self, obj, reader, *args, **kwargs):
         self.obj = obj
         self.reader = reader
-        self.current_artist = ImagePlot(self.axes, obj, auto_rotate=False)
+        self.current_artist = ImagePlot(self.axes, obj.tile, auto_rotate=False)
         self.current_artist.observe('updated', self.update)
         self.tile_artists = {obj.source: obj}
+
+        for key in ('IHC', 'OHC1', 'OHC2', 'OHC3', 'Extra'):
+            cells = PointPlot(self.axes, self.obj.cells[key], name=key)
+            spiral = LinePlot(self.axes, self.obj.spirals[key], name=key)
+            cells.observe('updated', self.update)
+            spiral.observe('updated', self.update)
+            self.point_artists[key, 'cells'] = cells
+            self.point_artists[key, 'spiral'] = spiral
 
         self.axes.axis('equal')
         self.axes.axis(self.obj.get_image_extent())
@@ -575,17 +635,37 @@ class CellCountPresenter(BasePresenter):
     def key_press(self, event):
         pass
 
+    def right_button_press(self, event):
+        if self.cells == 'Extra' and self.tool != 'cells':
+            # Special case. I don't want to add spiral/exclude regions to extra
+            # cells data structure for now.
+            return
+        if event.key == 'control' and event.xdata is not None:
+            if self.tool == 'spiral':
+                self.point_artists[self.cells, 'spiral'].set_origin(event.xdata, event.ydata)
+        elif event.key == "shift" and event.xdata is not None:
+            if self.tool == 'cells':
+                self.point_artists[self.cells, 'cells'].remove_point(event.xdata, event.ydata)
+            elif self.tool == 'spiral':
+                self.point_artists[self.cells, 'spiral'].remove_point(event.xdata, event.ydata)
+            elif self.tool == 'exclude':
+                self.point_artists[self.cells, 'spiral'].remove_exclude(event.xdata, event.ydata)
+        elif event.xdata is not None:
+            if self.tool == 'cells':
+                self.point_artists[self.cells, 'cells'].add_point(event.xdata, event.ydata)
+            elif self.tool == 'spiral':
+                self.point_artists[self.cells, 'spiral'].add_point(event.xdata, event.ydata)
+            elif self.tool == 'exclude':
+                if self.drag_event is None:
+                    self.start_drag_exclude(event)
+                else:
+                    self.end_drag_exclude(event, keep=True)
+
 
 class CochleogramPresenter(BasePresenter):
 
     # Tile artists
     current_artist_index = Value()
-    current_artist = Value()
-
-    # For spirals and cells
-    point_artists = Dict()
-    current_spiral_artist = Value()
-    current_cells_artist = Value()
 
     highlight_selected = Bool(False)
     alpha_selected = Float(0.50)
@@ -595,10 +675,6 @@ class CochleogramPresenter(BasePresenter):
 
     cells = Enum("IHC", "OHC1", "OHC2", "OHC3", "Extra")
     tool = Enum("tile", "spiral", "exclude", "cells")
-
-    spiral_empty = Bool(True)
-    spiral_ready = Bool(False)
-    cells_empty = Bool(True)
 
     def __init__(self, obj, reader, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -654,45 +730,8 @@ class CochleogramPresenter(BasePresenter):
             self.current_artist.zorder = self.zorder_selected
         self.redraw()
 
-    @observe('cells', 'tool')
-    def _update_plots(self, event=None):
-        for artist in self.point_artists.values():
-            artist.visible = False
-            if hasattr(artist, 'exclude_visible'):
-                artist.exclude_visible = False
-        if self.tool == 'tile':
-            self.current_spiral_artist = None
-            self.current_cells_artist = None
-        else:
-            self.current_spiral_artist = self.point_artists[self.cells, 'spiral']
-            self.current_cells_artist = self.point_artists[self.cells, 'cells']
-            self.current_spiral_artist.exclude_visible = True
-            if self.tool in ('spiral', 'exclude'):
-                self.current_spiral_artist.visible = True
-            else:
-                self.current_cells_artist.visible = True
-
-    def set_interaction_mode(self, cells=None, tool=None):
-        if cells is not None:
-            self.cells = cells
-        if tool is not None:
-            self.tool = tool
-
     def action_auto_align_tiles(self):
         self.obj.align_tiles()
-
-    def action_guess_cells(self, width, spacing, channel):
-        n = self.obj.guess_cells(self.cells, width, spacing, channel)
-        self.set_interaction_mode(None, 'cells')
-        return n
-
-    def action_clear_cells(self):
-        self.obj.clear_cells(self.cells)
-        self.set_interaction_mode(None, 'cells')
-
-    def action_clear_spiral(self):
-        self.obj.clear_spiral(self.cells)
-        self.set_interaction_mode(None, 'spiral')
 
     def action_clone_spiral(self, to_spiral, distance):
         xn, yn = self.obj.spirals[self.cells].expand_nodes(distance)
@@ -779,7 +818,7 @@ class CochleogramPresenter(BasePresenter):
 
     def right_button_press(self, event):
         if self.tool != 'tile':
-            self.button_press_point_plot(event)
+            self.right_button_press_point_plot(event)
 
     def left_button_release(self, event):
         if not self.pan_performed:
@@ -793,9 +832,7 @@ class CochleogramPresenter(BasePresenter):
                     self.current_artist_index = i
                     break
 
-    def button_press_point_plot(self, event):
-        if event.button != MouseButton.RIGHT:
-            return
+    def right_button_press_point_plot(self, event):
         if self.cells == 'Extra' and self.tool != 'cells':
             # Special case. I don't want to add spiral/exclude regions to extra
             # cells data structure for now.
@@ -805,7 +842,7 @@ class CochleogramPresenter(BasePresenter):
                 self.point_artists[self.cells, 'spiral'].set_origin(event.xdata, event.ydata)
         elif event.key == "shift" and event.xdata is not None:
             if self.tool == 'cells':
-                self.point_artists[self.cells, 'cells'].remove_point(event.xdaa, event.ydata)
+                self.point_artists[self.cells, 'cells'].remove_point(event.xdata, event.ydata)
             elif self.tool == 'spiral':
                 self.point_artists[self.cells, 'spiral'].remove_point(event.xdata, event.ydata)
             elif self.tool == 'exclude':
