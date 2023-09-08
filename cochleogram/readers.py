@@ -26,7 +26,7 @@ class BaseReader:
     def save_state(self, obj, state):
         state_filename = self.state_filename(obj)
         state_filename.parent.mkdir(exist_ok=True)
-        state_filename.write_text(json.dumps(obj, indent=4))
+        state_filename.write_text(json.dumps(state, indent=4))
 
 
 class Reader20x(BaseReader):
@@ -235,7 +235,7 @@ class LIFTileReader(TileReader):
     def load_tile(self, tile_name):
         info, img = util.load_lif(self.path, tile_name)
         tile = model.Tile(info, img, source=tile_name)
-        return model.TileAnalysis(tile, source=tile_name)
+        return model.TileAnalysis(tile, name=tile_name)
 
     def list_tiles(self):
         tile_names = {}

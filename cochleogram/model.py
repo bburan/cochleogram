@@ -490,6 +490,18 @@ class CellAnalysis:
     def clear_spiral(self, cell_type):
         self.spirals[cell_type].clear()
 
+    def get_state(self):
+        return {
+            'spirals': {k: v.get_state() for k, v in self.spirals.items()},
+            'cells': {k: v.get_state() for k, v in self.cells.items()},
+        }
+
+    def set_state(self, state):
+        for k, v in self.spirals.items():
+            v.set_state(state['spirals'][k])
+        for k, v in self.cells.items():
+            v.set_state(state['cells'][k])
+
 
 class Piece(CellAnalysis):
 
@@ -499,6 +511,9 @@ class Piece(CellAnalysis):
         self.piece = piece
         self.copied_from = copied_from
         self.region = region
+
+    def __iter__(self):
+        yield from self.tiles
 
     @property
     def is_copy(self):
@@ -574,22 +589,6 @@ class Piece(CellAnalysis):
             info[k] = t_base.info[k]
         return Tile(info, merged_image, f'piece_{self.piece}_merged')
 
-    def get_state(self):
-        return {
-            'tiles': {t.source: t.get_state() for t in self.tiles},
-            'spirals': {k: v.get_state() for k, v in self.spirals.items()},
-            'cells': {k: v.get_state() for k, v in self.cells.items()},
-            'copied_from': self.copied_from,
-        }
-
-    def set_state(self, state):
-        for k, v in self.spirals.items():
-            v.set_state(state['spirals'][k])
-        for k, v in self.cells.items():
-            v.set_state(state['cells'][k])
-        for tile in self.tiles:
-            tile.set_state(state['tiles'][tile.source])
-
     def align_tiles(self, alignment_channel='MyosinVIIa'):
         # First, figure out the order in which we should work on the alignment.
         # Let's keep it basic by just sorting by lower left corner of the xy
@@ -621,6 +620,19 @@ class Piece(CellAnalysis):
             base_tile = tile
             base_img = img
             base_mask = mask
+
+    def get_state(self):
+        state = super().get_state()
+        state.update({
+            'tiles': {t.source: t.get_state() for t in self.tiles},
+            'copied_from': self.copied_from,
+        })
+        return state
+
+    def set_state(self, state):
+        super().set_state(state)
+        for tile in self.tiles:
+            tile.set_state(state['tiles'][tile.source])
 
 
 freq_fn = {
@@ -714,10 +726,10 @@ class Cochlea:
 
 class TileAnalysis(CellAnalysis):
 
-    def __init__(self, tile, source):
+    def __init__(self, tile, name):
         super().__init__()
         self.tile = tile
-        self.source = source
+        self.name = name
 
     def merge_tiles(self):
         return self.tile
@@ -729,6 +741,9 @@ class TileAnalysis(CellAnalysis):
     def channel_names(self):
         # We assume that each tile has the same set of channels
         return self.tile.channel_names
+
+    def __iter__(self):
+        yield from [self.tile]
 
 
 class TileAnalysisCollection:

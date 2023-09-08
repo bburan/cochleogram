@@ -12,6 +12,7 @@ from atom.api import (
     List,
     observe,
     Property,
+    set_default,
     Str,
     Tuple,
     Typed,
@@ -35,7 +36,7 @@ from matplotlib import transforms as T
 import numpy as np
 from scipy import interpolate
 
-from cochleogram.config import CELLS
+from cochleogram.config import CELLS, CELL_KEY_MAP, TOOL_KEY_MAP
 from cochleogram.model import ChannelConfig, Piece, Points, Tile
 from cochleogram.util import get_region, make_plot_path, shortest_path
 
@@ -339,8 +340,33 @@ class BasePresenter(Atom):
     #: Label of cell being marked
     cells = Str()
 
+    #: List of available cells
+    available_cells = Tuple()
+
+    def _default_available_cells(self):
+        return CELLS
+
+    def _default_cells(self):
+        return self.available_cells[0]
+
     #: Active tool
     tool = Str()
+
+    #: List of available tools
+    available_tools = Tuple()
+
+    def _default_tool(self):
+        return self.available_tools[0]
+
+    #: List of valid key shortcuts
+    valid_keys = List()
+
+    def _default_valid_keys(self):
+        tkm_inv = {v: k for k, v in TOOL_KEY_MAP}
+        ckm_inv = {v: k for k, v in CELL_KEY_MAP}
+        tk = [tkm_inv[t] for t in self.available_tools]
+        ck = [ckm_inv[t] for t in self.available_cells]
+        return tuple(tk + ck)
 
     #: Interface to help read data
     reader = Value()
@@ -395,8 +421,36 @@ class BasePresenter(Atom):
     current_spiral_artist = Value()
     current_cells_artist = Value()
 
-    def _default_cells(self):
-        return CELLS[0]
+    current_artist_index = Value()
+
+    #: If True, rotate tiles so they represent the orientation they were imaged
+    #: on the confocal.
+    rotate_tiles = Bool(True)
+
+
+    def __init__(self, obj, reader, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.obj = obj
+        self.reader = reader
+        self.tile_artists = {t.source: ImagePlot(self.axes, t, auto_rotate=self.rotate_tiles) \
+                             for t in self.obj}
+        for artist in self.tile_artists.values():
+            artist.observe('updated', self.update)
+        self.current_artist_index = 0
+        for key in self.available_cells:
+            cells = PointPlot(self.axes, self.obj.cells[key], name=key)
+            spiral = LinePlot(self.axes, self.obj.spirals[key], name=key)
+            cells.observe('updated', self.update)
+            spiral.observe('updated', self.update)
+            self.point_artists[key, 'cells'] = cells
+            self.point_artists[key, 'spiral'] = spiral
+
+        # This is necessary because `imshow` will override some axis settings.
+        # We need to set them back to what we want.
+        self.axes.axis('equal')
+        self.axes.axis(self.obj.get_image_extent())
+        self.saved_state = self.get_full_state()
+
 
     ###################################################################################
     # Code for handling events from Matplotlib
@@ -456,9 +510,6 @@ class BasePresenter(Atom):
 
     def right_button_press(self, event):
         pass
-
-    def key_press(self, event):
-        raise NotImplementedError
 
     def scroll(self, event):
         """
@@ -608,35 +659,7 @@ class BasePresenter(Atom):
         if tool is not None:
             self.tool = tool
 
-
-class CellCountPresenter(BasePresenter):
-
-    def __init__(self, obj, reader, *args, **kwargs):
-        self.obj = obj
-        self.reader = reader
-        self.current_artist = ImagePlot(self.axes, obj.tile, auto_rotate=False)
-        self.current_artist.observe('updated', self.update)
-        self.tile_artists = {obj.source: obj}
-
-        for key in CELLS:
-            cells = PointPlot(self.axes, self.obj.cells[key], name=key)
-            spiral = LinePlot(self.axes, self.obj.spirals[key], name=key)
-            cells.observe('updated', self.update)
-            spiral.observe('updated', self.update)
-            self.point_artists[key, 'cells'] = cells
-            self.point_artists[key, 'spiral'] = spiral
-
-        self.axes.axis('equal')
-        self.axes.axis(self.obj.get_image_extent())
-        self.tool = 'spiral'
-
-    def check_for_changes(self):
-        pass
-
-    def key_press(self, event):
-        pass
-
-    def right_button_press(self, event):
+    def button_press_point_plot(self, event):
         if self.cells == 'Extra' and self.tool != 'cells':
             # Special case. I don't want to add spiral/exclude regions to extra
             # cells data structure for now.
@@ -664,69 +687,63 @@ class CellCountPresenter(BasePresenter):
 
     def key_press(self, event):
         key = event.key.lower()
-        if key == 's':
-            deferred_call(self.set_interaction_mode, None, 'spiral')
-        elif key == 'e':
-            deferred_call(self.set_interaction_mode, None, 'exclude')
-        elif key == 'c':
-            deferred_call(self.set_interaction_mode, None, 'cells')
-        elif key == 't':
-            deferred_call(self.set_interaction_mode, None, 'tile')
-        elif key == 'i':
-            deferred_call(self.set_interaction_mode, 'IHC', None)
-        elif key == '1':
-            deferred_call(self.set_interaction_mode, 'OHC1', None)
-        elif key == '2':
-            deferred_call(self.set_interaction_mode, 'OHC2', None)
-        elif key == '3':
-            deferred_call(self.set_interaction_mode, 'OHC3', None)
-        elif key == '4':
-            deferred_call(self.set_interaction_mode, 'Extra', None)
-        elif (key == 'escape') and (self.drag_event is not None) and (self.tool == 'exclude'):
-            self.end_drag_exclude(event, keep=False)
-        elif self.tool == 'tile' and self.current_artist is not None:
-            self.key_press_tile(event)
-        else:
-            self.key_press_point_plot(event)
+        if (t := TOOL_KEY_MAP.get(key, None)) is not None:
+            deferred_call(self.set_interaction_mode, None, t)
+            return True
+        if (c := CELL_KEY_MAP.get(key, None)) is not None:
+            deferred_call(self.set_interaction_mode, c, None)
+            return True
+        return False
+
+    def get_state(self):
+        artist_states = {k: a.get_state() for k, a in self.tile_artists.items()}
+        point_artist_states = {':'.join(k): a.get_state() for k, a in self.point_artists.items()}
+        return {
+            "cells": self.cells,
+            "tool": self.tool,
+            "artists": artist_states,
+            "point_artists": point_artist_states,
+        }
+
+    def set_state(self, state):
+        for k, s in state["artists"].items():
+            self.tile_artists[k].set_state(s)
+        for k, s in state["point_artists"].items():
+            self.point_artists[tuple(k.split(':'))].set_state(s)
+        self.set_interaction_mode(state["cells"], state["tool"])
+
+    def get_full_state(self):
+        return deepcopy({
+            "data": self.obj.get_state(),
+            "view": self.get_state(),
+        })
+
+    def _observe_current_artist_index(self, event):
+        self.current_artist = list(self.tile_artists.values())[self.current_artist_index]
+
+
+class CellCountPresenter(BasePresenter):
+
+    available_tools = set_default(('spiral', 'cells'))
+    rotate_tiles = set_default(False)
+
+    def check_for_changes(self):
+        pass
+
+    def right_button_press(self, event):
+        self.button_press_point_plot(event)
 
 
 class CochleogramPresenter(BasePresenter):
-
-    # Tile artists
-    current_artist_index = Value()
 
     highlight_selected = Bool(False)
     alpha_selected = Float(0.50)
     alpha_unselected = Float(0.50)
     zorder_selected = Int(20)
     zorder_unselected = Int(10)
+    rotate_tiles = set_default(True)
 
-    tool = Enum("tile", "spiral", "exclude", "cells")
-
-    def __init__(self, obj, reader, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.obj = obj
-        self.reader = reader
-        self.tile_artists = {
-            t.source: ImagePlot(self.axes, t) for t in self.obj.tiles
-        }
-        for artist in self.tile_artists.values():
-            artist.observe('updated', self.update)
-        self.current_artist_index = 0
-        for key in CELLS:
-            cells = PointPlot(self.axes, self.obj.cells[key], name=key)
-            spiral = LinePlot(self.axes, self.obj.spirals[key], name=key)
-            cells.observe('updated', self.update)
-            spiral.observe('updated', self.update)
-            self.point_artists[key, 'cells'] = cells
-            self.point_artists[key, 'spiral'] = spiral
-
-        # This is necessary because `imshow` will override some axis settings.
-        # We need to set them back to what we want.
-        self.axes.axis('equal')
-        self.axes.axis(self.obj.get_image_extent())
-        self.saved_state = self.get_full_state()
-        self.tool = 'tile'
+    available_tools = set_default(("tile", "spiral", "exclude", "cells"))
 
     def _observe_saved_state(self, event):
         self.check_for_changes()
@@ -739,7 +756,7 @@ class CochleogramPresenter(BasePresenter):
         self.unsaved_changes = saved != unsaved
 
     def _observe_current_artist_index(self, event):
-        self.current_artist = list(self.tile_artists.values())[self.current_artist_index]
+        super()._observe_current_artist_index(event)
         self.update_highlight()
 
     @observe("highlight_selected",)
@@ -785,25 +802,9 @@ class CochleogramPresenter(BasePresenter):
             self.obj.spirals[spiral].simplify_exclude()
 
     def key_press(self, event):
-        key = event.key.lower()
-        if key == 's':
-            deferred_call(self.set_interaction_mode, None, 'spiral')
-        elif key == 'e':
-            deferred_call(self.set_interaction_mode, None, 'exclude')
-        elif key == 'c':
-            deferred_call(self.set_interaction_mode, None, 'cells')
-        elif key == 't':
-            deferred_call(self.set_interaction_mode, None, 'tile')
-        elif key == 'i':
-            deferred_call(self.set_interaction_mode, 'IHC', None)
-        elif key == '1':
-            deferred_call(self.set_interaction_mode, 'OHC1', None)
-        elif key == '2':
-            deferred_call(self.set_interaction_mode, 'OHC2', None)
-        elif key == '3':
-            deferred_call(self.set_interaction_mode, 'OHC3', None)
-        elif key == '4':
-            deferred_call(self.set_interaction_mode, 'Extra', None)
+        # If this returns True, event was handled
+        if super().key_press(event):
+            return
         elif (key == 'escape') and (self.drag_event is not None) and (self.tool == 'exclude'):
             self.end_drag_exclude(event, keep=False)
         elif self.tool == 'tile' and self.current_artist is not None:
@@ -832,7 +833,6 @@ class CochleogramPresenter(BasePresenter):
         else:
             direction = event.key
             scale = 0.1
-
         if direction in ["right", "left"]:
             lb, ub = self.axes.get_xlim()
             shift = (ub-lb) * scale * (1 if direction == 'right' else -1)
@@ -845,7 +845,7 @@ class CochleogramPresenter(BasePresenter):
 
     def right_button_press(self, event):
         if self.tool != 'tile':
-            self.right_button_press_point_plot(event)
+            self.button_press_point_plot(event)
 
     def left_button_release(self, event):
         if not self.pan_performed:
@@ -858,32 +858,6 @@ class CochleogramPresenter(BasePresenter):
                 if artist.contains(event.xdata, event.ydata):
                     self.current_artist_index = i
                     break
-
-    def right_button_press_point_plot(self, event):
-        if self.cells == 'Extra' and self.tool != 'cells':
-            # Special case. I don't want to add spiral/exclude regions to extra
-            # cells data structure for now.
-            return
-        if event.key == 'control' and event.xdata is not None:
-            if self.tool == 'spiral':
-                self.point_artists[self.cells, 'spiral'].set_origin(event.xdata, event.ydata)
-        elif event.key == "shift" and event.xdata is not None:
-            if self.tool == 'cells':
-                self.point_artists[self.cells, 'cells'].remove_point(event.xdata, event.ydata)
-            elif self.tool == 'spiral':
-                self.point_artists[self.cells, 'spiral'].remove_point(event.xdata, event.ydata)
-            elif self.tool == 'exclude':
-                self.point_artists[self.cells, 'spiral'].remove_exclude(event.xdata, event.ydata)
-        elif event.xdata is not None:
-            if self.tool == 'cells':
-                self.point_artists[self.cells, 'cells'].add_point(event.xdata, event.ydata)
-            elif self.tool == 'spiral':
-                self.point_artists[self.cells, 'spiral'].add_point(event.xdata, event.ydata)
-            elif self.tool == 'exclude':
-                if self.drag_event is None:
-                    self.start_drag_exclude(event)
-                else:
-                    self.end_drag_exclude(event, keep=True)
 
     @observe('tool', 'cells')
     def _reset_drag(self, event):
@@ -926,26 +900,3 @@ class CochleogramPresenter(BasePresenter):
 
     def end_drag_tile(self, event):
         self.drag_event = None
-
-    def get_state(self):
-        artist_states = {k: a.get_state() for k, a in self.tile_artists.items()}
-        point_artist_states = {':'.join(k): a.get_state() for k, a in self.point_artists.items()}
-        return {
-            "cells": self.cells,
-            "tool": self.tool,
-            "artists": artist_states,
-            "point_artists": point_artist_states,
-        }
-
-    def set_state(self, state):
-        for k, s in state["artists"].items():
-            self.tile_artists[k].set_state(s)
-        for k, s in state["point_artists"].items():
-            self.point_artists[tuple(k.split(':'))].set_state(s)
-        self.set_interaction_mode(state["cells"], state["tool"])
-
-    def get_full_state(self):
-        return deepcopy({
-            "data": self.obj.get_state(),
-            "view": self.get_state(),
-        })

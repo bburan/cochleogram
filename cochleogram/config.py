@@ -16,3 +16,19 @@ CHANNEL_CONFIG = {
     'Unknown 3': {'display_color': 'blue'},
 }
 
+
+TOOL_KEY_MAP = {
+    's': 'spiral',
+    'e': 'exclude',
+    'c': 'cells',
+    't': 'tile',
+}
+
+
+CELL_KEY_MAP = {
+    'i': 'IHC',
+    '1': 'OHC1',
+    '2': 'OHC2',
+    '3': 'OHC3',
+    '4': 'Extra',
+}

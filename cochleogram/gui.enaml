@@ -185,9 +185,6 @@ def load_state(parent, presenters):
             information(parent, 'Error', str(e))
 
 
-CELLS = ['IHC', 'OHC1', 'OHC2', 'OHC3', 'Extra']
-
-
 ################################################################################
 # Shared widgets
 ################################################################################
@@ -317,7 +314,7 @@ enamldef ChannelConfigPopup(PopupView):
 
 enamldef TileDockItem(DockItem): dock_item:
 
-    title << '{}{}'.format(presenter.obj.source, '*' if presenter.unsaved_changes else '')
+    title << '{}{}'.format(presenter.obj.name, '*' if presenter.unsaved_changes else '')
 
     attr presenter
     closable = False
@@ -403,7 +400,7 @@ enamldef TileDockItem(DockItem): dock_item:
             trailing_spacer = spacer(0)
 
             ObjectCombo:
-                items << CELLS
+                items << list(presenter.available_cells)
                 selected := presenter.cells
 
             Looper:
@@ -552,7 +549,7 @@ enamldef CochleogramDockItem(DockItem): dock_item:
                         presenter.tool = 'tile'
 
             ObjectCombo:
-                items << ['IHC'] if presenter.piece.is_copy else CELLS
+                items << ['IHC'] if presenter.piece.is_copy else list(presenter.available_cells)
                 selected := presenter.cells
 
             Looper:
@@ -647,7 +644,7 @@ enamldef CochleogramDockItem(DockItem): dock_item:
             Label:
                 text = 'Copy excluded regions to'
             ObjectCombo: copy_exclusion_to:
-                items << [c for c in CELLS if c != presenter.cells]
+                items << [c for c in presenter.available_cells if c != presenter.cells]
             PushButton:
                 text = 'Copy'
                 clicked ::
