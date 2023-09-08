@@ -25,10 +25,9 @@ import matplotlib as mp
 from matplotlib.axes import Axes
 from matplotlib.backend_bases import MouseButton
 from matplotlib.figure import Figure
-from matplotlib import (
-    patheffects,
-    ticker,
-)
+from matplotlib import ticker
+from matplotlib import patheffects as pe
+
 from matplotlib import patches as mpatches
 from matplotlib import path as mpath
 from matplotlib import transforms as T
@@ -36,7 +35,7 @@ from matplotlib import transforms as T
 import numpy as np
 from scipy import interpolate
 
-from cochleogram.config import CELLS, CELL_KEY_MAP, TOOL_KEY_MAP
+from cochleogram.config import CELLS, CELL_COLORS, CELL_KEY_MAP, TOOL_KEY_MAP
 from cochleogram.model import ChannelConfig, Piece, Points, Tile
 from cochleogram.util import get_region, make_plot_path, shortest_path
 
@@ -55,16 +54,29 @@ class PointPlot(Atom):
     axes = Value()
     points = Typed(Points)
     name = Str()
-    visible = Bool(True)
+    active = Bool(True)
     has_nodes = Bool(False)
 
     updated = Event()
     needs_redraw = Bool(False)
 
+    base_color = Value('black')
+    artist_styles = Dict()
+
+    def _default_artist_styles(self):
+        return {
+            'active': [
+                pe.PathPatchEffect(facecolor=self.base_color, edgecolor='white', linewidth=1),
+            ],
+            'inactive': [
+                pe.PathPatchEffect(facecolor=self.base_color, edgecolor='none', alpha=0.75),
+            ],
+        }
+
     def __init__(self, axes, points, **kwargs):
         super().__init__(**kwargs)
         self.axes = axes
-        self.artist, = axes.plot([], [], "ko", mec="w", mew=1, zorder=100)
+        self.artist, = axes.plot([], [], "o", zorder=100, color='none')
         self.points = points
         points.observe('updated', self.request_redraw)
 
@@ -83,7 +95,7 @@ class PointPlot(Atom):
     def remove_point(self, x, y):
         self.points.remove_node(x, y)
 
-    @observe("visible")
+    @observe("active")
     def request_redraw(self, event=False):
         self.needs_redraw = True
         deferred_call(self.redraw_if_needed)
@@ -97,7 +109,8 @@ class PointPlot(Atom):
         nodes = self.points.get_nodes()
         self.has_nodes = len(nodes[0]) > 0
         self.artist.set_data(*nodes)
-        self.artist.set_visible(self.visible)
+        style = 'active' if self.active else 'inactive'
+        self.artist.set_path_effects(self.artist_styles[style])
         self.updated = True
 
 
@@ -115,21 +128,46 @@ class LinePlot(PointPlot):
     has_spline = Bool(False)
     has_exclusion = Bool(False)
 
-    exclude_visible = Bool(False)
+    #: Is the exclusion region active?
+    exclude_active = Bool(False)
 
     start_drag = Value()
     end_drag = Value()
 
+    spline_artist_styles = Dict()
+    origin_artist_styles = Dict()
+
+    def _default_artist_styles(self):
+        return {
+            'active': [
+                pe.PathPatchEffect(facecolor=self.base_color, edgecolor='white', linewidth=1),
+            ],
+            'inactive': [],
+        }
+
+    def _default_spline_artist_styles(self):
+        return {
+            'active': [
+                pe.Stroke(linewidth=3, foreground='white'),
+                pe.Stroke(linewidth=1, foreground=self.base_color),
+            ],
+            'inactive': [
+                pe.Stroke(foreground=self.base_color, linewidth=1, alpha=0.75),
+            ],
+        }
+
+    def _default_origin_artist_styles(self):
+        return {
+            'active': [
+                pe.PathPatchEffect(facecolor='FireBrick', edgecolor='white', linewidth=1),
+            ],
+            'inactive': [],
+        }
+
     def __init__(self, axes, points, **kwargs):
         super().__init__(axes, points, **kwargs)
-        spline_effect = [
-            patheffects.Stroke(linewidth=3, foreground="white"),
-            patheffects.Normal(),
-        ]
-        (self.spline_artist,) = axes.plot(
-            [], [], "k-", zorder=90, path_effects=spline_effect
-        )
-        self.origin_artist, = axes.plot([], [], "o", color='FireBrick', mec="w", mew=1, zorder=90, ms=10)
+        self.spline_artist, = axes.plot([], [], "-", zorder=90, color='none')
+        self.origin_artist, = axes.plot([], [], "o", color='none', zorder=90, ms=10)
 
         verts = np.zeros((0, 2))
         path = mpath.Path(verts, [])
@@ -159,31 +197,32 @@ class LinePlot(PointPlot):
     def remove_exclude(self, x, y):
         self.points.remove_exclude(x, y)
 
-    def _observe_exclude_visible(self, event=False):
+    def _observe_exclude_active(self, event=False):
         self.needs_redraw = True
         deferred_call(self.redraw_if_needed)
 
     def redraw(self, event=None):
         super().redraw()
+        style = 'active' if self.active else 'inactive'
+        self.spline_artist.set_path_effects(self.spline_artist_styles[style])
+        self.origin_artist.set_path_effects(self.origin_artist_styles[style])
 
         if self.has_nodes:
             nodes = self.points.get_nodes()
             self.origin_artist.set_data(nodes[0][0], nodes[1][0])
         else:
             self.origin_artist.set_data([], [])
-        self.origin_artist.set_visible(self.visible)
 
         xi, yi = self.points.interpolate()
         self.has_spline = len(xi) > 0
         self.spline_artist.set_data(xi, yi)
-        self.spline_artist.set_visible(self.visible)
-        self.new_exclude_artist.set_visible(self.visible)
+        self.new_exclude_artist.set_visible(self.active)
 
         self.has_exclusion = len(self.points.exclude) > 0
         path = make_plot_path(self.points, self.points.exclude)
 
         self.exclude_artist.set_path(path)
-        self.exclude_artist.set_visible(self.exclude_visible)
+        self.exclude_artist.set_visible(self.exclude_active)
 
         if self.start_drag and self.end_drag:
             try:
@@ -438,8 +477,9 @@ class BasePresenter(Atom):
             artist.observe('updated', self.update)
         self.current_artist_index = 0
         for key in self.available_cells:
-            cells = PointPlot(self.axes, self.obj.cells[key], name=key)
-            spiral = LinePlot(self.axes, self.obj.spirals[key], name=key)
+            color = CELL_COLORS[key]
+            cells = PointPlot(self.axes, self.obj.cells[key], name=key, base_color=color)
+            spiral = LinePlot(self.axes, self.obj.spirals[key], name=key, base_color=color)
             cells.observe('updated', self.update)
             spiral.observe('updated', self.update)
             self.point_artists[key, 'cells'] = cells
@@ -625,20 +665,20 @@ class BasePresenter(Atom):
     @observe('cells', 'tool')
     def _update_plots(self, event=None):
         for artist in self.point_artists.values():
-            artist.visible = False
-            if hasattr(artist, 'exclude_visible'):
-                artist.exclude_visible = False
+            artist.active = False
+            if hasattr(artist, 'exclude_active'):
+                artist.exclude_active = False
         if self.tool == 'tile':
             self.current_spiral_artist = None
             self.current_cells_artist = None
         else:
             self.current_spiral_artist = self.point_artists[self.cells, 'spiral']
             self.current_cells_artist = self.point_artists[self.cells, 'cells']
-            self.current_spiral_artist.exclude_visible = True
+            self.current_spiral_artist.exclude_active = True
             if self.tool in ('spiral', 'exclude'):
-                self.current_spiral_artist.visible = True
+                self.current_spiral_artist.active = True
             else:
-                self.current_cells_artist.visible = True
+                self.current_cells_artist.active = True
 
     def action_guess_cells(self, width, spacing, channel):
         n = self.obj.guess_cells(self.cells, width, spacing, channel)
