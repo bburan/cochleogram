@@ -17,19 +17,7 @@ from skimage.color import rgb2gray
 from raster_geometry import sphere
 
 from cochleogram import util
-
-
-CHANNEL_CONFIG = {
-    'CtBP2': { 'display_color': 'red'},
-    'MyosinVIIa': {'display_color': 'blue'},
-    'GluR2': {'display_color': 'green'},
-    'GlueR2': {'display_color': 'green'},
-    'PMT': {'display_color': 'white'},
-    'DAPI': {'display_color': 'white'},
-    'Unknown 1': {'display_color': 'red'},
-    'Unknown 2': {'display_color': 'green'},
-    'Unknown 3': {'display_color': 'blue'},
-}
+from cochleogram.config import CELLS, CHANNEL_CONFIG
 
 
 class ChannelConfig(Atom):
@@ -486,9 +474,8 @@ class Tile(Atom):
 class CellAnalysis:
 
     def __init__(self):
-        keys = 'IHC', 'OHC1', 'OHC2', 'OHC3', 'Extra'
-        self.spirals = {k: Points() for k in keys}
-        self.cells = {k: Points() for k in keys}
+        self.spirals = {c: Points() for c in CELLS}
+        self.cells = {c: Points() for c in CELLS}
 
     def guess_cells(self, cell_type, width, spacing, channel):
         tile = self.merge_tiles()

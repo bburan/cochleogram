@@ -35,6 +35,7 @@ from matplotlib import transforms as T
 import numpy as np
 from scipy import interpolate
 
+from cochleogram.config import CELLS
 from cochleogram.model import ChannelConfig, Piece, Points, Tile
 from cochleogram.util import get_region, make_plot_path, shortest_path
 
@@ -335,8 +336,10 @@ class ImagePlot(Atom):
 
 class BasePresenter(Atom):
 
-
+    #: Label of cell being marked
     cells = Str()
+
+    #: Active tool
     tool = Str()
 
     #: Interface to help read data
@@ -391,6 +394,9 @@ class BasePresenter(Atom):
     point_artists = Dict()
     current_spiral_artist = Value()
     current_cells_artist = Value()
+
+    def _default_cells(self):
+        return CELLS[0]
 
     ###################################################################################
     # Code for handling events from Matplotlib
@@ -605,12 +611,6 @@ class BasePresenter(Atom):
 
 class CellCountPresenter(BasePresenter):
 
-    #: Cells being marked
-    cells = Enum("IHC", "OHC1", "OHC2", "OHC3", "Extra")
-
-    #: Current tool
-    tool = Enum("spiral", "cells")
-
     def __init__(self, obj, reader, *args, **kwargs):
         self.obj = obj
         self.reader = reader
@@ -618,7 +618,7 @@ class CellCountPresenter(BasePresenter):
         self.current_artist.observe('updated', self.update)
         self.tile_artists = {obj.source: obj}
 
-        for key in ('IHC', 'OHC1', 'OHC2', 'OHC3', 'Extra'):
+        for key in CELLS:
             cells = PointPlot(self.axes, self.obj.cells[key], name=key)
             spiral = LinePlot(self.axes, self.obj.spirals[key], name=key)
             cells.observe('updated', self.update)
@@ -628,6 +628,7 @@ class CellCountPresenter(BasePresenter):
 
         self.axes.axis('equal')
         self.axes.axis(self.obj.get_image_extent())
+        self.tool = 'spiral'
 
     def check_for_changes(self):
         pass
@@ -661,6 +662,33 @@ class CellCountPresenter(BasePresenter):
                 else:
                     self.end_drag_exclude(event, keep=True)
 
+    def key_press(self, event):
+        key = event.key.lower()
+        if key == 's':
+            deferred_call(self.set_interaction_mode, None, 'spiral')
+        elif key == 'e':
+            deferred_call(self.set_interaction_mode, None, 'exclude')
+        elif key == 'c':
+            deferred_call(self.set_interaction_mode, None, 'cells')
+        elif key == 't':
+            deferred_call(self.set_interaction_mode, None, 'tile')
+        elif key == 'i':
+            deferred_call(self.set_interaction_mode, 'IHC', None)
+        elif key == '1':
+            deferred_call(self.set_interaction_mode, 'OHC1', None)
+        elif key == '2':
+            deferred_call(self.set_interaction_mode, 'OHC2', None)
+        elif key == '3':
+            deferred_call(self.set_interaction_mode, 'OHC3', None)
+        elif key == '4':
+            deferred_call(self.set_interaction_mode, 'Extra', None)
+        elif (key == 'escape') and (self.drag_event is not None) and (self.tool == 'exclude'):
+            self.end_drag_exclude(event, keep=False)
+        elif self.tool == 'tile' and self.current_artist is not None:
+            self.key_press_tile(event)
+        else:
+            self.key_press_point_plot(event)
+
 
 class CochleogramPresenter(BasePresenter):
 
@@ -673,7 +701,6 @@ class CochleogramPresenter(BasePresenter):
     zorder_selected = Int(20)
     zorder_unselected = Int(10)
 
-    cells = Enum("IHC", "OHC1", "OHC2", "OHC3", "Extra")
     tool = Enum("tile", "spiral", "exclude", "cells")
 
     def __init__(self, obj, reader, *args, **kwargs):
@@ -686,7 +713,7 @@ class CochleogramPresenter(BasePresenter):
         for artist in self.tile_artists.values():
             artist.observe('updated', self.update)
         self.current_artist_index = 0
-        for key in ('IHC', 'OHC1', 'OHC2', 'OHC3', 'Extra'):
+        for key in CELLS:
             cells = PointPlot(self.axes, self.obj.cells[key], name=key)
             spiral = LinePlot(self.axes, self.obj.spirals[key], name=key)
             cells.observe('updated', self.update)
@@ -699,7 +726,7 @@ class CochleogramPresenter(BasePresenter):
         self.axes.axis('equal')
         self.axes.axis(self.obj.get_image_extent())
         self.saved_state = self.get_full_state()
-        self.drag_event = None
+        self.tool = 'tile'
 
     def _observe_saved_state(self, event):
         self.check_for_changes()
