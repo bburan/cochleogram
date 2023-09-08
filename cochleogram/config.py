@@ -26,6 +26,7 @@ TOOL_KEY_MAP = {
 
 
 CELL_KEY_MAP = {
+    '`': 'IHC',
     'i': 'IHC',
     '1': 'OHC1',
     '2': 'OHC2',
