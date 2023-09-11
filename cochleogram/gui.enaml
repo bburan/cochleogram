@@ -41,9 +41,9 @@ def bind(figure, presenter):
 
 
 ################################################################################
-# 20x functions (i.e., cochleogram counts)
+# Cochlea reader functions 
 ################################################################################
-def open_20x_processed_dataset(window):
+def open_processed_cochlea_dataset(window):
     # Check for unsaved changes
     if any(p.unsaved_changes for p in window.presenters):
         q = 'There are unsaved changes. Your current analysis will be lost. Are you sure?'
@@ -53,10 +53,10 @@ def open_20x_processed_dataset(window):
 
     path = FileDialogEx.get_existing_directory(window, current_path=str(window.current_path))
     if path:
-        load_20x_dataset(path, window, readers.ProcessedReader)
+        load_cochlea_dataset(path, window, readers.ProcessedCochleaReader)
 
 
-def open_20x_lif_file(window):
+def open_lif_cochlea_file(window):
     # Check for unsaved changes
     if any(p.unsaved_changes for p in window.presenters):
         q = 'There are unsaved changes. Your current analysis will be lost. Are you sure?'
@@ -66,25 +66,24 @@ def open_20x_lif_file(window):
 
     path = FileDialogEx.get_open_file_name(window, current_path=str(window.current_path))
     if path:
-        load_20x_dataset(path, window, readers.LIFReader)
+        load_cochlea_dataset(path, window, readers.LIFCochleaReader)
 
 
-def load_20x_dataset(path, window, reader_class=None):
+def load_cochlea_dataset(path, window, reader_class=None):
     path = Path(path)
     if reader_class is None:
         if path.is_dir():
-            reader_class = readers.ProcessedReader
+            reader_class = readers.ProcessedCochleaReader
         elif path.suffix.lower() == '.lif':
-            reader_class = readers.LIFReader
+            reader_class = readers.LIFCochleaReader
         else:
             raise ValueError(f'Unrecognized format for {path}')
 
-    # First, make sure we can load the cochlea
+    # First, make sure we can load the data
     reader = reader_class(path)
-
-    # Remove existing presenters and close any cochlea that was loaded
+    window.cochlea = reader.load_cochlea()
     window.tile_collection = None
-    window.cochlea = None
+
     workspace = window.find('dock_area')
     for p in window.presenters:
         remove_dock_item(workspace, p)
@@ -92,7 +91,7 @@ def load_20x_dataset(path, window, reader_class=None):
     # Now, load new region
     window.current_path = path
     window.reader = reader
-    window.presenters = [CochleogramPresenter(r, reader) for t in window.tile_collection.regions]
+    window.presenters = [CochleogramPresenter(p, reader) for p in window.cochlea.pieces]
     for p in window.presenters:
         target = add_dock_item(workspace, p, 'help', CochleogramDockItem)
 
@@ -121,9 +120,10 @@ def load_63x_dataset(path, window, reader_class=None):
         else:
             raise ValueError(f'Unrecognized format for {path}')
 
-    # First, make sure we can load the cochlea
+    # First, make sure we can load the data
     reader = reader_class(path)
     window.tile_collection = reader.load_tile_collection()
+    window.cochlea = None
 
     # Remove existing cochlea
     workspace = window.find('dock_area')
@@ -144,9 +144,9 @@ def load_63x_dataset(path, window, reader_class=None):
 def load_dataset(path, window, reader_class=None):
     path = Path(path)
     if '63x' in path.stem:
-        return load_63x_dataset(path, window, reader_class)
+        return load_tile_dataset(path, window, reader_class)
     else:
-        return load_20x_dataset(path, window, reader_class)
+        return load_cochlea_dataset(path, window, reader_class)
 
 
 def add_dock_item(dock_area, presenter, target, dock_item_class):
@@ -157,7 +157,7 @@ def add_dock_item(dock_area, presenter, target, dock_item_class):
 
 
 def remove_dock_item(dock_area, presenter):
-    op = RemoveItem(item=f'dock_piece_{presenter.piece}')
+    op = RemoveItem(item=f'dock_piece_{presenter.obj}')
     dock_area.update_layout(op)
 
 
@@ -230,6 +230,11 @@ def guess_cells_channel(cells, channel_names):
 enamldef ActionGuessCells(HGroup):
     attr presenter
     attr is_copy = False
+
+    constraints = [
+        guess_width.width == 50,
+        guess_spacing.width == 50,
+    ]
 
     padding = 0
     align_widths = False
@@ -446,7 +451,7 @@ enamldef TileDockItem(DockItem): dock_item:
 
 enamldef CochleogramDockItem(DockItem): dock_item:
 
-    title << 'Piece {}{}'.format(presenter.piece.piece, '*' if presenter.unsaved_changes else '')
+    title << 'Piece {}{}'.format(presenter.obj.piece, '*' if presenter.unsaved_changes else '')
 
     attr presenter
     closable = False
@@ -484,8 +489,6 @@ enamldef CochleogramDockItem(DockItem): dock_item:
             align('left', display_label, tool_label, action_label),
             align('left', mode_buttons, action_auto_align_tiles,
                   action_guess_cells, action_copy_exclusion),
-            guess_width.width == 50,
-            guess_spacing.width == 50,
         ]
 
         Label: display_label:
@@ -557,7 +560,7 @@ enamldef CochleogramDockItem(DockItem): dock_item:
                         presenter.tool = 'tile'
 
             ObjectCombo:
-                items << ['IHC'] if presenter.piece.is_copy else list(presenter.available_cells)
+                items << ['IHC'] if presenter.obj.is_copy else list(presenter.available_cells)
                 selected := presenter.cells
 
             Looper:
@@ -566,7 +569,7 @@ enamldef CochleogramDockItem(DockItem): dock_item:
                     icon = load_icon(loop_item)
                     icon_size = (20, 20)
                     tool_tip = loop_item
-                    enabled << not (presenter.piece.is_copy and loop_item != 'spiral') \
+                    enabled << not (presenter.obj.is_copy and loop_item != 'spiral') \
                         and not (presenter.cells == 'Extra' and loop_item != 'cells')
                     group = tool_group
                     checkable = True
@@ -587,21 +590,21 @@ enamldef CochleogramDockItem(DockItem): dock_item:
 
         PBActionClearSpiral: action_clear_spiral:
             presenter = dock_item.presenter
-            is_copy = dock_item.presenter.piece_is_copy
+            is_copy = dock_item.presenter.obj.is_copy
 
         PBActionClearCells: action_clear_cells:
             presenter = dock_item.presenter
-            is_copy = dock_item.presenter.piece_is_copy
+            is_copy = dock_item.presenter.obj.is_copy
 
         ActionGuessCells: action_guess_cells:
             presenter = dock_item.presenter
-            is_copy = dock_item.presenter.piece_is_copy
+            is_copy = dock_item.presenter.obj.is_copy
 
         PushButton: action_simplify_exclusions:
             text = 'Simplify exclusions'
             enabled << (presenter.current_spiral_artist is not None) \
                 and presenter.current_spiral_artist.has_exclusion \
-                and not presenter.piece.is_copy
+                and not presenter.obj.is_copy
             clicked ::
                 m = f'Are you sure you want to simplify the excluded regions?'
                 button = question(self, 'Confirm action', m)
@@ -615,7 +618,7 @@ enamldef CochleogramDockItem(DockItem): dock_item:
         PushButton: action_merge_ohc_exclusions:
             text = 'Combine OHC exclusions'
             enabled << presenter.point_artists['OHC1', 'spiral'].has_spline \
-                and not presenter.piece.is_copy \
+                and not presenter.obj.is_copy \
                 and presenter.point_artists['OHC2', 'spiral'].has_spline \
                 and presenter.point_artists['OHC3', 'spiral'].has_spline \
                 and (
@@ -759,19 +762,19 @@ enamldef CochleagramWindow(MainWindow): window:
         Menu:
             title = '&File'
             Action:
-                text = 'Open processed dataset'
+                text = 'Open processed dataset containing full cochlea scan'
                 triggered ::
                     try:
-                        open_20x_processed_dataset(window)
+                        open_processed_cochlea_dataset(window)
                     except IOError as e:
                         log.exception(e)
                         critical(window, 'Load', str(e))
 
             Action:
-                text = 'Open 20x LIF file'
+                text = 'Open LIF file containing full cochlea scan'
                 triggered ::
                     try:
-                        open_20x_lif_file(window)
+                        open_lif_cochlea_file(window)
                     except IOError as e:
                         log.exception(e)
                         critical(window, 'Load', str(e))
@@ -780,7 +783,7 @@ enamldef CochleagramWindow(MainWindow): window:
                 separator = True
 
             Action:
-                text = 'Count HCs in 63x LIF file\tCtrl+C'
+                text = 'Count cells in each tile of a LIF file\tCtrl+C'
                 triggered ::
                     try:
                         open_63x_lif_file_for_HC_counts(window)
@@ -792,7 +795,7 @@ enamldef CochleagramWindow(MainWindow): window:
                 separator = True
 
             Action:
-                text = 'Process 20x LIF file\tCtrl+P'
+                text = 'Process LIF file\tCtrl+P'
                 triggered ::
                     path = FileDialogEx.get_open_file_name(window, current_path=str(window.current_path))
                     if path:
@@ -802,7 +805,7 @@ enamldef CochleagramWindow(MainWindow): window:
                         deferred_call(util.process_lif, path, reprocess=True, cb=cb)
 
             Action:
-                text = 'Process 63x LIF file\tCtrl+P'
+                text = 'Convert LIF file to Imaris\tCtrl+P'
                 triggered ::
                     path = FileDialogEx.get_open_file_name(window, current_path=str(window.current_path))
                     if path:

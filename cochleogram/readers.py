@@ -29,7 +29,7 @@ class BaseReader:
         state_filename.write_text(json.dumps(state, indent=4))
 
 
-class Reader20x(BaseReader):
+class CochleaReader(BaseReader):
 
     def __init__(self, path):
         self.path = Path(path)
@@ -62,7 +62,7 @@ class Reader20x(BaseReader):
         fig.savefig(filename)
 
 
-class LIFReader20x(Reader20x):
+class LIFCochleaReader(CochleaReader):
 
     def __init__(self, path):
         from readlif.reader import LifFile
@@ -131,7 +131,7 @@ class LIFReader20x(Reader20x):
         return self.save_path() / f'{self.path.stem}_piece_{piece.piece}_analysis.json'
 
 
-class ProcessedReader20x(Reader20x):
+class ProcessedCochleaReader(CochleaReader):
 
     def list_pieces(self):
         p_piece = re.compile('.*piece_(\d+)\w?')

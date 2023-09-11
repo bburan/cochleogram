@@ -858,7 +858,7 @@ class CochleogramPresenter(BasePresenter):
         # If this returns True, event was handled
         if super().key_press(event):
             return
-        elif (key == 'escape') and (self.drag_event is not None) and (self.tool == 'exclude'):
+        elif (event.key.lower() == 'escape') and (self.drag_event is not None) and (self.tool == 'exclude'):
             self.end_drag_exclude(event, keep=False)
         elif self.tool == 'tile' and self.current_artist is not None:
             self.key_press_tile(event)
