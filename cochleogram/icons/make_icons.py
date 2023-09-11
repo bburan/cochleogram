@@ -1,3 +1,4 @@
+import matplotlib as mp
 import matplotlib.pyplot as plt
 from matplotlib import patheffects as pe
 import numpy as np
@@ -66,21 +67,30 @@ def make_exclude():
 
 
 def make_main_icon():
+    fig = plt.figure(frameon=False)
+    fig.set_size_inches(2, 2)
+    ax = plt.Axes(fig, [0, 0, 1, 1])
+    ax.set_axis_off()
+    fig.add_axes(ax)
+
     spline_effect = [
         pe.Stroke(linewidth=6, foreground="white"),
-        pe.Normal(),
+        pe.Stroke(linewidth=3, foreground="cornflowerblue"),
     ]
+
+    patch = mp.patches.Rectangle([0, 0], width=1, height=1, facecolor='midnightblue',
+                                edgecolor='white', linewidth=10,
+                                transform=ax.transAxes)
+    ax.add_patch(patch)
+
     theta = np.linspace(0, n_turns*2*np.pi, 1000)
-    r = theta * 2
-    figure, ax = plt.subplots(1, 1, subplot_kw={'projection': 'polar'}, figsize=(1,1 ))
-    figure.subplots_adjust(left=0, bottom=0, right=1.0, top=1.0)
-    ax.plot(theta, r, 'k-', lw=3, solid_capstyle='round', path_effects=spline_effect)
-    ax.grid(False)
-    ax.set_yticklabels([])
-    ax.set_xticklabels([])
-    ax.set_rmax(r.max()*1.1)
-    ax.axis('off')
-    figure.savefig('main-icon.png', transparent=True, bbox_inches='tight')
+    x = 2 * theta * np.cos(theta)
+    y = 2 * theta * np.sin(theta)
+    plt.plot(x, y, color='none', solid_capstyle='round', path_effects=spline_effect)
+
+    b = max(np.abs(x.min()), x.max()) + 7.5
+    ax.axis(xmin=-b, xmax=b, ymin=-b, ymax=b)
+    fig.savefig('main-icon.png', transparent=False, bbox_inches='tight')
 
 
 make_spiral()
