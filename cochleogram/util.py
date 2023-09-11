@@ -134,10 +134,25 @@ def load_lif(filename, piece, max_xy=4096, dtype='uint8'):
     root, _ = get_xml(filename)
     node = root.find(f'.//Element[@Name="{piece}"]')
 
-    y_pos = float(node.find('.//FilterSettingRecord[@Attribute="XPos"]').attrib['Variant'])
-    x_pos = float(node.find('.//FilterSettingRecord[@Attribute="YPos"]').attrib['Variant'])
-    # This seems to work for the Z-axis.
-    z_pos = float(node.find('.//DimensionDescription[@DimID="3"]').attrib['Origin'])
+    # If the stage was not initialized, then X and Y position will be missing.
+    try:
+        y_pos = float(node.find('.//FilterSettingRecord[@Attribute="XPos"]').attrib['Variant'])
+    except AttributeError:
+        y_pos = 0
+    try:
+        x_pos = float(node.find('.//FilterSettingRecord[@Attribute="YPos"]').attrib['Variant'])
+    except AttributeError:
+        x_pos = 0
+
+    # If we are just imaging the XY dimension this will not be set. I'm not
+    # sure yet how we can distinguish a XYZ image with a single Z-slice from a XY
+    # image.
+    try:
+        # This seems to work for the Z-axis.
+        z_pos = float(node.find('.//DimensionDescription[@DimID="3"]').attrib['Origin'])
+    except AttributeError:
+        z_pos = 0
+
 
     rot = float(node.find('.//FilterSettingRecord[@Attribute="Scan Rotation"]').attrib['Variant'])
     rot_dir = float(node.find('.//FilterSettingRecord[@Attribute="Rotation Direction"]').attrib['Variant'])
@@ -149,12 +164,16 @@ def load_lif(filename, piece, max_xy=4096, dtype='uint8'):
     system = f'{system_type} {system_number}'
 
     pixels = np.array(stack.dims[:3])
-    voxel_size = 1 / np.array(stack.scale[:3])
+    if stack.scale[2] is None:
+        scale = list(stack.scale[:2]) + [1]
+    else:
+        scale = stack.scale[:3]
+
+    voxel_size = 1 / np.array(scale)
     lower = np.array([x_pos, y_pos, z_pos]) * 1e6
 
     zoom = min(1, max_xy / max(pixels[:2]))
     voxel_size[:2] /= zoom
-
 
     nx = min(max_xy, pixels[0])
     ny = min(max_xy, pixels[1])
@@ -176,7 +195,7 @@ def load_lif(filename, piece, max_xy=4096, dtype='uint8'):
 
     channels = []
     for c in filename.stem.split('-')[2:]:
-        if c == '63x':
+        if c in ('63x', '20x', '10x'):
             continue
         channels.append({'name': c})
 
