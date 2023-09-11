@@ -246,6 +246,7 @@ class ImagePlot(Atom):
 
     display_mode = Enum("projection", "slice")
     display_channels = List()
+    visible_channels = Property()
     extent = Tuple()
     z_slice = Int(0)
     z_slice_min = Int(0)
@@ -262,6 +263,9 @@ class ImagePlot(Atom):
 
     updated = Event()
     needs_redraw = Bool(False)
+
+    def _get_visible_channels(self):
+        return [c.name for c in self.channel_config.values() if c.visible]
 
     def get_state(self):
         return {
@@ -680,7 +684,8 @@ class BasePresenter(Atom):
                 self.current_cells_artist.active = True
 
     def action_guess_cells(self, width, spacing, channel):
-        n = self.obj.guess_cells(self.cells, width, spacing, channel)
+        z_slice = self.current_artist.z_slice if self.current_artist.display_mode == 'slice' else None
+        n = self.obj.guess_cells(self.cells, width, spacing, channel, z_slice)
         self.set_interaction_mode(None, 'cells')
         return n
 
@@ -828,7 +833,7 @@ class CochleogramPresenter(BasePresenter):
         self.redraw()
 
     def action_auto_align_tiles(self):
-        self.obj.align_tiles()
+        self.obj.align_tiles(self.current_artist.visible_channels)
 
     def action_clone_spiral(self, to_spiral, distance):
         xn, yn = self.obj.spirals[self.cells].expand_nodes(distance)

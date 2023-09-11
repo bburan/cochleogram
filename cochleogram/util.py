@@ -467,7 +467,7 @@ def lif_to_ims(filename, reprocess=False, cb=None):
         cb(progress)
 
 
-def guess_cells(tile, spiral, width, spacing, channel):
+def guess_cells(tile, spiral, width, spacing, channel, z_slice):
     log.info('Find cells within %fum of spiral and spaced %fum on channel %s', width, spacing, channel)
     x, y = spiral.interpolate(resolution=0.0001)
     i = tile.map(x, y, channel, width=width)
@@ -476,7 +476,7 @@ def guess_cells(tile, spiral, width, spacing, channel):
     # Map to centroid
     xni, yni = tile.to_indices(xn, yn)
 
-    image = tile.get_image(channel).max(axis=-1)
+    image = tile.get_image(channel, z_slice).max(axis=-1)
     x_radius = tile.to_indices_delta(width, 'x')
     y_radius = tile.to_indices_delta(width, 'y')
     log.info('Searching for centroid within %ix%i pixels of spiral', x_radius, y_radius)

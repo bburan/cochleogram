@@ -477,10 +477,10 @@ class CellAnalysis:
         self.spirals = {c: Points() for c in CELLS}
         self.cells = {c: Points() for c in CELLS}
 
-    def guess_cells(self, cell_type, width, spacing, channel):
+    def guess_cells(self, cell_type, width, spacing, channel, z_slice):
         tile = self.merge_tiles()
         x, y = util.guess_cells(tile, self.spirals[cell_type], width, spacing,
-                                channel)
+                                channel, z_slice)
         self.cells[cell_type].set_nodes(x, y)
         return len(x)
 
