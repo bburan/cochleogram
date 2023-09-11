@@ -6,9 +6,6 @@ from pathlib import Path
 from enaml.application import deferred_call
 from enaml.qt.QtCore import QStandardPaths
 
-from cochleogram.model import Piece
-from cochleogram.util import list_lif_stacks, list_pieces, load_lif, load_czi, process_lif
-
 
 def config_file():
     config_path = Path(QStandardPaths.standardLocations(QStandardPaths.AppConfigLocation)[0])
@@ -29,24 +26,8 @@ def write_config(config):
         config.write(fh)
 
 
-def main_prepare_czi():
-    parser = argparse.ArgumentParser('Create cached files for cochleogram from CZI files')
-    parser.add_argument('path')
-    args = parser.parse_args()
-    src = Path(args.path)
-    cochleogram_path = src / 'cochleograms'
-    for filename in cochleogram_path.glob('*.czi'):
-        # We don't need to do anything. Just create the cache which occurs when
-        # we load data for the first time.
-        print(f'Processing file {filename}')
-        _ = load_data(filename)
-
-    src_cache = src / 'cochleograms' / 'processed' / 'max_xy_512_dtype_uint8'
-    dest = src / 'cochleogram_analysis'
-    src_cache.rename(dest)
-
-
 def main_prepare_lif():
+    from cochleogram.util import process_lif
     parser = argparse.ArgumentParser('Create cached files for cochleogram from LIF files')
     parser.add_argument('path')
     parser.add_argument('--reprocess', action='store_true')
