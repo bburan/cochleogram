@@ -344,7 +344,7 @@ enamldef TileDockItem(DockItem): dock_item:
         constraints = [
             vbox(
                 hbox(display_label, channels, display_as_label, display_mode,
-                     z_slice_number_label, z_slice),
+                     z_slice_number_label, z_slice, spacer),
                 hbox(tool_label, mode_buttons, spacer, load_analysis, save_analysis),
                 hbox(action_label, action_clear_spiral, action_clear_cells,
                      spacer, spacing=0),
@@ -468,7 +468,7 @@ enamldef CochleogramDockItem(DockItem): dock_item:
         constraints = [
             vbox(
                 hbox(display_label, channels, display_as_label, display_mode,
-                     z_slice_number_label, z_slice, display_apply,
+                     z_slice_number_label, z_slice, display_apply, spacer,
                      highlight_selected),
                 hbox(tool_label, mode_buttons, spacer, load_analysis, save_analysis),
                 hbox(action_label, action_auto_align_tiles,
