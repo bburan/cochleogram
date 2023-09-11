@@ -67,15 +67,16 @@ def make_exclude():
 
 
 def make_main_icon():
+    n_turns = 1.5
     fig = plt.figure(frameon=False)
-    fig.set_size_inches(2, 2)
+    fig.set_size_inches(1, 1)
     ax = plt.Axes(fig, [0, 0, 1, 1])
     ax.set_axis_off()
     fig.add_axes(ax)
 
     spline_effect = [
-        pe.Stroke(linewidth=6, foreground="white"),
-        pe.Stroke(linewidth=3, foreground="cornflowerblue"),
+        pe.Stroke(linewidth=12, foreground="white"),
+        pe.Stroke(linewidth=6, foreground="cornflowerblue"),
     ]
 
     patch = mp.patches.Rectangle([0, 0], width=1, height=1, facecolor='midnightblue',
@@ -89,12 +90,14 @@ def make_main_icon():
     plt.plot(x, y, color='none', solid_capstyle='round', path_effects=spline_effect)
 
     b = max(np.abs(x.min()), x.max()) + 7.5
-    ax.axis(xmin=-b, xmax=b, ymin=-b, ymax=b)
+    xs = 0.5*(x.max() - (-x.min()))
+    ys = np.mean(y)
+    ax.axis(xmin=-b+xs, xmax=b+xs, ymin=-b+ys, ymax=b+ys)
     fig.savefig('main-icon.png', transparent=False, bbox_inches='tight')
 
 
-make_spiral()
-make_cells()
-make_exclude()
-make_tile()
+#make_spiral()
+#make_cells()
+#make_exclude()
+#make_tile()
 make_main_icon()
