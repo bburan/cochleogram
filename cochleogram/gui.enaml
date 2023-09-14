@@ -99,7 +99,7 @@ def load_cochlea_dataset(path, window, reader_class=None):
 ################################################################################
 # 63x functions (i.e., cochleogram counts)
 ################################################################################
-def open_63x_lif_file_for_HC_counts(window):
+def open_lif_file_for_HC_counts(window):
     # Check for unsaved changes
     if any(p.unsaved_changes for p in window.presenters):
         q = 'There are unsaved changes. Your current analysis will be lost. Are you sure?'
@@ -109,10 +109,10 @@ def open_63x_lif_file_for_HC_counts(window):
 
     path = FileDialogEx.get_open_file_name(window, current_path=str(window.current_path))
     if path:
-        load_63x_dataset(path, window, readers.LIFTileReader)
+        load_tile_dataset(path, window, readers.LIFTileReader)
 
 
-def load_63x_dataset(path, window, reader_class=None):
+def load_tile_dataset(path, window, reader_class=None):
     path = Path(path)
     if reader_class is None:
         if path.suffix.lower() == '.lif':
@@ -389,6 +389,7 @@ enamldef TileDockItem(DockItem): dock_item:
                 presenter.set_z_slice(value)
             minimum << presenter.current_artist.z_slice_min
             maximum << presenter.current_artist.z_slice_max
+            tool_tip = 'Use up and down arrow keys when counting cells to scroll through z-steps'
 
         PushButton: load_analysis:
             text = 'Load'
@@ -414,14 +415,16 @@ enamldef TileDockItem(DockItem): dock_item:
 
             ObjectCombo:
                 items << list(presenter.available_cells)
-                selected := presenter.cells
+                selected << presenter.cells
+                selected ::
+                    presenter.set_interaction_mode(cells=selected)
+                tool_tip = "Press ~, 1, 2, 3, and 4 to switch between the cell types"
 
             Looper:
                 iterable = ['spiral', 'cells']
                 PushButton:
                     icon = load_icon(loop_item)
                     icon_size = (20, 20)
-                    tool_tip = loop_item
                     enabled << not (presenter.cells == 'Extra' and loop_item != 'cells')
                     group = tool_group
                     checkable = True
@@ -429,6 +432,7 @@ enamldef TileDockItem(DockItem): dock_item:
                     toggled ::
                         if self.checked:
                             presenter.tool = loop_item
+                    tool_tip = "Press s to select spiral tool, c to select cell tool"
 
         Label: action_label:
             text = 'Actions'
@@ -786,7 +790,7 @@ enamldef CochleagramWindow(MainWindow): window:
                 text = 'Count cells in each tile of a LIF file\tCtrl+C'
                 triggered ::
                     try:
-                        open_63x_lif_file_for_HC_counts(window)
+                        open_lif_file_for_HC_counts(window)
                     except IOError as e:
                         log.exception(e)
                         critical(window, 'Load', str(e))

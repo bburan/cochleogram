@@ -1,4 +1,5 @@
 from copy import deepcopy
+import time
 
 import json
 from atom.api import (
@@ -466,6 +467,10 @@ class BasePresenter(Atom):
 
     current_artist_index = Value()
 
+    #: Track timestamp of last scroll event recieved to ensure that we don't
+    #: zoom too quickly.
+    last_scroll_time = Value(time.time())
+
     #: If True, rotate tiles so they represent the orientation they were imaged
     #: on the confocal.
     rotate_tiles = Bool(True)
@@ -524,7 +529,7 @@ class BasePresenter(Atom):
         self.axes.set_xlim(self.pan_xlim)
         self.axes.set_ylim(self.pan_ylim)
         self.pan_performed = True
-        self.redraw()
+        self.update()
 
     def end_pan(self, event):
         self.pan_event = None
@@ -554,10 +559,26 @@ class BasePresenter(Atom):
     def right_button_press(self, event):
         pass
 
+    def scroll_zaxis(self, step):
+        if self.current_artist.display_mode == 'projection':
+            if step == 'down':
+                z = self.current_artist.z_slice_max
+            else:
+                z = self.current_artist.z_slice_min
+        else:
+            if step == 'down':
+                z = self.current_artist.z_slice - 1
+            else:
+                z = self.current_artist.z_slice + 1
+        lb, ub = self.current_artist.z_slice_min, self.current_artist.z_slice_max
+        if lb <= z <= ub:
+            self.current_artist.display_mode = 'slice'
+            self.current_artist.z_slice = z
+        else:
+            self.current_artist.display_mode = 'projection'
+        self.update()
+
     def scroll(self, event):
-        """
-        This zooms in without shifting the center point
-        """
         if event.xdata is None:
             return
 
@@ -588,7 +609,7 @@ class BasePresenter(Atom):
         new_ylim = [ydata - yfrac * new_yrange, ydata + (1 - yfrac) * new_yrange]
         self.axes.set_xlim(new_xlim)
         self.axes.set_ylim(new_ylim)
-        self.redraw()
+        self.update()
 
     def _get_z_min(self):
         return min(a.z_slice_min for a in self.tile_artists.values())
@@ -784,12 +805,21 @@ class CellCountPresenter(BasePresenter):
 
     def set_interaction_mode(self, cells=None, tool=None):
         if cells is not None and tool is None:
-            if not self.point_artists[cells, 'spiral'].has_nodes:
+            if cells != 'Extra' and not self.point_artists[cells, 'spiral'].has_nodes:
                 tool = 'spiral'
             else:
                 tool = 'cells'
         super().set_interaction_mode(cells, tool)
 
+    def key_press(self, event):
+        # If this returns True, event was handled
+        if super().key_press(event):
+            return
+        if self.current_artist is None:
+            return
+        if event.key in ["up", "down"]:
+            self.scroll_zaxis(event.key)
+        self.update()
 
 
 class CochleogramPresenter(BasePresenter):
@@ -830,7 +860,7 @@ class CochleogramPresenter(BasePresenter):
                 self.current_artist.rectangle.set_alpha(1)
                 self.current_artist.highlight = True
             self.current_artist.zorder = self.zorder_selected
-        self.redraw()
+        self.update()
 
     def action_auto_align_tiles(self):
         self.obj.align_tiles(self.current_artist.visible_channels)
@@ -899,7 +929,7 @@ class CochleogramPresenter(BasePresenter):
             lb, ub = self.axes.get_ylim()
             shift = (ub-lb) * scale * (1 if event.key == 'up' else -1)
             self.axes.set_ylim(lb + shift, ub + shift)
-        self.redraw()
+        self.update()
 
     def right_button_press(self, event):
         if self.tool != 'tile':
