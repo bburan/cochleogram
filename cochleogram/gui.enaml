@@ -81,8 +81,7 @@ def load_cochlea_dataset(path, window, reader_class=None):
 
     # First, make sure we can load the data
     reader = reader_class(path)
-    window.cochlea = reader.load_collection(False)
-    window.collection = None
+    window.collection = reader.load_collection(False)
 
     workspace = window.find('dock_area')
     for p in window.presenters:
@@ -91,7 +90,7 @@ def load_cochlea_dataset(path, window, reader_class=None):
     # Now, load new region
     window.current_path = path
     window.reader = reader
-    window.presenters = [CochleogramPresenter(p, reader) for p in window.cochlea.pieces]
+    window.presenters = [CochleogramPresenter(p, reader) for p in window.collection]
     for p in window.presenters:
         target = add_dock_item(workspace, p, 'help', CochleogramDockItem)
 
@@ -123,7 +122,6 @@ def load_tile_dataset(path, window, reader_class=None):
     # First, make sure we can load the data
     reader = reader_class(path)
     window.collection = reader.load_collection(False)
-    window.cochlea = None
 
     # Remove existing cochlea
     workspace = window.find('dock_area')
@@ -757,7 +755,6 @@ enamldef CochleagramWindow(MainWindow): window:
     icon = load_icon('main-icon')
 
     attr reader
-    attr cochlea
     attr collection
     attr presenters = []
     attr current_path = ''
@@ -833,17 +830,17 @@ enamldef CochleagramWindow(MainWindow): window:
 
             Action:
                 text = 'Generate composite (frequency map)\tCtrl+F'
-                enabled << cochlea is not None
+                enabled << collection is not None
                 triggered ::
-                    window = CompositeWindow(cochlea=cochlea, reader=reader)
+                    window = CompositeWindow(cochlea=collection, reader=reader)
                     window.show()
 
             Action:
                 text = 'Generate slide map'
-                enabled << cochlea is not None
+                enabled << collection is not None
                 triggered ::
                     try:
-                        fig = plot.plot_slide_layout(cochlea)
+                        fig = plot.plot_slide_layout(collection)
                         fig.suptitle(reader.get_name())
                         reader.save_figure(fig, 'slide_map')
                         information(window, 'Plotting', 'Slide map has been generated.')
