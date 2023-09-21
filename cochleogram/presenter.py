@@ -38,6 +38,7 @@ from scipy import interpolate
 
 from cochleogram.config import CELLS, CELL_COLORS, CELL_KEY_MAP, TOOL_KEY_MAP
 from cochleogram.model import ChannelConfig, Piece, Points, Tile
+from cochleogram.readers import BaseReader
 from cochleogram.util import get_region, make_plot_path, shortest_path
 
 
@@ -413,7 +414,7 @@ class BasePresenter(Atom):
         return tuple(tk + ck)
 
     #: Interface to help read data
-    reader = Value()
+    reader = Instance(BaseReader)
 
     #: Parent figure of the axes
     figure = Typed(Figure)
@@ -465,7 +466,7 @@ class BasePresenter(Atom):
     current_spiral_artist = Value()
     current_cells_artist = Value()
 
-    current_artist_index = Value()
+    current_artist_index = Int(0)
 
     #: Track timestamp of last scroll event recieved to ensure that we don't
     #: zoom too quickly.
@@ -475,15 +476,13 @@ class BasePresenter(Atom):
     #: on the confocal.
     rotate_tiles = Bool(True)
 
-    def __init__(self, obj, reader, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.obj = obj
-        self.reader = reader
+    def __init__(self, obj, reader, **kwargs):
+        super().__init__(obj=obj, reader=reader, **kwargs)
         self.tile_artists = {t.source: ImagePlot(self.axes, t, auto_rotate=self.rotate_tiles) \
                              for t in self.obj}
         for artist in self.tile_artists.values():
             artist.observe('updated', self.update)
-        self.current_artist_index = 0
+
         for key in self.available_cells:
             color = CELL_COLORS[key]
             cells = PointPlot(self.axes, self.obj.cells[key], name=key, base_color=color)
@@ -497,7 +496,10 @@ class BasePresenter(Atom):
         # We need to set them back to what we want.
         self.axes.axis('equal')
         self.axes.axis(self.obj.get_image_extent())
-        self.saved_state = self.get_full_state()
+        self.load_state()
+
+    def _default_saved_state(self):
+        return self.get_full_state()
 
 
     ###################################################################################
@@ -630,10 +632,13 @@ class BasePresenter(Atom):
         self.update()
 
     def load_state(self):
-        state = self.reader.load_state(self.obj)
-        self.obj.set_state(state['data'])
-        self.saved_state = state
-        self.update()
+        try:
+            state = self.reader.load_state(self.obj)
+            self.obj.set_state(state['data'])
+            self.saved_state = state
+            self.update()
+        except IOError:
+            pass
 
     def update(self, event=None):
         self.check_for_changes()
