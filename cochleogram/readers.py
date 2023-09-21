@@ -14,9 +14,6 @@ from . import util
 
 class BaseReader:
 
-    def state_filename(self, obj):
-        raise NotImplementedError
-
     def load_state(self, obj):
         state_filename = self.state_filename(obj)
         if not state_filename.exists():
@@ -28,38 +25,41 @@ class BaseReader:
         state_filename.parent.mkdir(exist_ok=True)
         state_filename.write_text(json.dumps(state, indent=4))
 
+    def load_collection(self, load_analysis=True,
+                     raise_load_analysis_error=False):
+        collection = self._load_collection()
+        if load_analysis:
+            for obj in collection:
+                try:
+                    state = self.load_state(obj)
+                    obj.set_state(state['data'])
+                except IOError:
+                    if raise_load_analysis_error:
+                        raise
+        return collection
+
+    def _load_collection(self):
+        raise NotImplementedError
+
+    def state_filename(self, obj):
+        raise NotImplementedError
+
+    def get_name(self):
+        return self.path.stem
+
 
 class CochleaReader(BaseReader):
 
     def __init__(self, path):
         self.path = Path(path)
 
-    def load_cochlea(self, load_analysis=True,
-                     raise_load_analysis_error=False):
-        cochlea = self._load_cochlea()
-        if load_analysis:
-            for piece in cochlea.pieces:
-                try:
-                    state = self.load_state(piece)
-                    piece.set_state(state['data'])
-                except IOError:
-                    if raise_load_analysis_error:
-                        raise
-        return cochlea
-
-    def _load_cochlea(self):
-        raise NotImplementedError
-
-    def state_filename(self, piece):
-        raise NotImplementedError
-
-    def get_name(self):
-        return self.path.stem
-
     def save_figure(self, fig, suffix):
         filename = self.save_path() / f'{self.get_name()}_{suffix}.pdf'
         filename.parent.mkdir(exist_ok=True)
         fig.savefig(filename)
+
+    def state_filename(self, piece):
+        return self.save_path() / f'{self.path.stem}_piece_{piece.piece}_analysis.json'
 
 
 class LIFCochleaReader(CochleaReader):
@@ -118,7 +118,7 @@ class LIFCochleaReader(CochleaReader):
 
         return model.Piece(tiles, piece, copied_from=copied)
 
-    def _load_cochlea(self):
+    def _load_collection(self):
         pieces = [self.load_piece(p, sn) for p, sn in self.list_pieces().items()]
         if len(pieces) == 0:
             raise IOError(f'No pieces found in {self.path}')
@@ -126,9 +126,6 @@ class LIFCochleaReader(CochleaReader):
 
     def save_path(self):
         return self.path.parent / self.path.stem
-
-    def state_filename(self, piece):
-        return self.save_path() / f'{self.path.stem}_piece_{piece.piece}_analysis.json'
 
 
 class ProcessedCochleaReader(CochleaReader):
@@ -182,20 +179,14 @@ class ProcessedCochleaReader(CochleaReader):
             t.extent[4:] = [z_min, z_max]
         return model.Piece(tiles, piece, copied_from=copied)
 
-    def _load_cochlea(self):
+    def _load_collection(self):
         pieces = [self.load_piece(p) for p in self.list_pieces()]
         if len(pieces) == 0:
             raise IOError(f'No pieces found in {self.path}')
         return model.Cochlea(pieces)
 
-    def state_filename(self, piece):
-        return self.path / f'{self.path.stem}_piece_{piece.piece}_analysis.json'
-
     def save_path(self):
         return self.path
-
-    def state_filename(self, piece):
-        return self.save_path() / f'{self.path.stem}_piece_{piece.piece}_analysis.json'
 
 
 class TileReader(BaseReader):
@@ -208,28 +199,6 @@ class TileReader(BaseReader):
         self.path = Path(path)
         self.pattern = re.compile(pattern)
 
-    def load_tile_collection(self, load_analysis=True,
-                             raise_load_analysis_error=False):
-        tile_collection = self._load_tile_collection()
-        if load_analysis:
-            for tile in tile_collection.tiles:
-                try:
-                    state = self.load_state(tile)
-                    tile.set_state(state['data'])
-                except IOError:
-                    if raise_load_analysis_error:
-                        raise
-        return tile_collection
-
-    def _load_tile_collection(self):
-        raise NotImplementedError
-
-    def get_name(self):
-        return self.path.stem
-
-    def state_filename(self, piece):
-        raise NotImplementedError
-
 
 class LIFTileReader(TileReader):
 
@@ -238,7 +207,7 @@ class LIFTileReader(TileReader):
         super().__init__(path, pattern)
         self.fh = LifFile(path)
 
-    def _load_tile_collection(self):
+    def _load_collection(self):
         tiles = [self.load_tile(r) for r in self.list_tiles()]
         return model.TileAnalysisCollection(tiles=tiles)
 

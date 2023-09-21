@@ -81,8 +81,8 @@ def load_cochlea_dataset(path, window, reader_class=None):
 
     # First, make sure we can load the data
     reader = reader_class(path)
-    window.cochlea = reader.load_cochlea()
-    window.tile_collection = None
+    window.cochlea = reader.load_collection(False)
+    window.collection = None
 
     workspace = window.find('dock_area')
     for p in window.presenters:
@@ -122,7 +122,7 @@ def load_tile_dataset(path, window, reader_class=None):
 
     # First, make sure we can load the data
     reader = reader_class(path)
-    window.tile_collection = reader.load_tile_collection()
+    window.collection = reader.load_collection(False)
     window.cochlea = None
 
     # Remove existing cochlea
@@ -133,7 +133,7 @@ def load_tile_dataset(path, window, reader_class=None):
     # Now, show region collection
     window.current_path = path
     window.reader = reader
-    window.presenters = [CellCountPresenter(t, reader) for t in window.tile_collection]
+    window.presenters = [CellCountPresenter(t, reader) for t in window.collection]
     for p in window.presenters:
         target = add_dock_item(workspace, p, 'help', TileDockItem)
 
@@ -758,7 +758,7 @@ enamldef CochleagramWindow(MainWindow): window:
 
     attr reader
     attr cochlea
-    attr tile_collection
+    attr collection
     attr presenters = []
     attr current_path = ''
 

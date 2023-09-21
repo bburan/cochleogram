@@ -647,6 +647,9 @@ class Cochlea:
         self.pieces[0].region = 'hook'
         self.pieces[-1].region = 'apex'
 
+    def __iter__(self):
+        yield from self.pieces
+
     @property
     def channel_names(self):
         # We assume that each tile has the same set of channels
