@@ -77,11 +77,9 @@ class PointPlot(Atom):
         }
 
     def __init__(self, axes, points, **kwargs):
-        super().__init__(**kwargs)
-        self.axes = axes
-        self.artist, = axes.plot([], [], "o", zorder=100, color='none')
-        self.points = points
-        points.observe('updated', self.request_redraw)
+        super().__init__(axes=axes, points=points, **kwargs)
+        self.artist, = self.axes.plot([], [], "o", zorder=100, color='none')
+        self.points.observe('updated', self.request_redraw)
 
     def get_state(self):
         return {}
@@ -470,7 +468,7 @@ class BasePresenter(Atom):
     current_spiral_artist = Value()
     current_cells_artist = Value()
 
-    current_artist_index = Int(0)
+    current_artist_index = Int()
 
     #: Track timestamp of last scroll event recieved to ensure that we don't
     #: zoom too quickly.
@@ -484,6 +482,7 @@ class BasePresenter(Atom):
         super().__init__(obj=obj, reader=reader, **kwargs)
         self.tile_artists = {t.source: ImagePlot(self.axes, t, auto_rotate=self.rotate_tiles) \
                              for t in self.obj}
+
         for artist in self.tile_artists.values():
             artist.observe('updated', self.update)
 
@@ -496,6 +495,10 @@ class BasePresenter(Atom):
             self.point_artists[key, 'cells'] = cells
             self.point_artists[key, 'spiral'] = spiral
 
+        # Needs to be set to force a change notification that sets the current
+        # artist.
+        self.current_artist_index = 0
+
         # This is necessary because `imshow` will override some axis settings.
         # We need to set them back to what we want.
         self.axes.axis('equal')
@@ -504,7 +507,6 @@ class BasePresenter(Atom):
 
     def _default_saved_state(self):
         return self.get_full_state()
-
 
     ###################################################################################
     # Code for handling events from Matplotlib
