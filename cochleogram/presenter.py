@@ -9,6 +9,7 @@ from atom.api import (
     Enum,
     Event,
     Float,
+    Instance,
     Int,
     List,
     observe,
