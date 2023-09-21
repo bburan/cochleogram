@@ -401,7 +401,10 @@ class BasePresenter(Atom):
     available_tools = Tuple()
 
     def _default_tool(self):
-        return self.available_tools[0]
+        if 'spiral' in self.available_tools:
+            return 'spiral'
+        else:
+            return self.available_tools[0]
 
     #: List of valid key shortcuts
     valid_keys = List()
