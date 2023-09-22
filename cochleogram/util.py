@@ -195,7 +195,7 @@ def load_lif(filename, piece, max_xy=4096, dtype='uint8'):
 
     channels = []
     for c in filename.stem.split('-')[2:]:
-        if c in ('63x', '20x', '10x'):
+        if c in ('63x', '20x', '10x', 'CellCount'):
             continue
         channels.append({'name': c})
 
