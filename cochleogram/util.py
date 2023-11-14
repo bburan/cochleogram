@@ -210,7 +210,8 @@ def load_lif(filename, piece, max_xy=4096, dtype='uint8'):
         'voxel_size': voxel_size.tolist(),
         # XYZ origin in microns (um).
         'lower': lower.tolist(),
-        # Store version number of cochleogram along with 
+        # Store version number of cochleogram along with the data (in case we
+        # need to recover this later to figure out bugs).
         'version': version('cochleogram'),
         # Reader used to read in data
         'reader': 'lif',
@@ -266,118 +267,90 @@ def process_lif(filename, reprocess, cb=None):
         cb(progress)
 
 
-def load_czi(filename, max_xy=1024, dtype='uint8', reload=False):
-    raise NotImplementedError
-    # Note, this needs to be updated since I made some modifications to support
-    # Leica LIF format and that includes changing imshow origin from lower to
-    # upper since I was using the Leica viewer to make sure I got the extents
-    # aligned properly.
-
+def load_czi(filename, max_xy=1024, dtype='uint8'):
     filename = Path(filename)
-    cache_filename = (
-        filename.parent
-        / "processed"
-        / f"max_xy_{max_xy}_dtype_{dtype}"
-        / filename.with_suffix(".pkl").name
-    )
-    if not reload and cache_filename.exists():
-        with cache_filename.open("rb") as fh:
-            return pickle.load(fh)
 
     from aicspylibczi import CziFile
     fh = CziFile(filename)
 
-    x_pixels = float(
-        fh.meta.find(
-            "Metadata/Experiment/ExperimentBlocks/AcquisitionBlock/AcquisitionModeSetup/DimensionX"
-        ).text
-    )
-    y_pixels = float(
-        fh.meta.find(
-            "Metadata/Experiment/ExperimentBlocks/AcquisitionBlock/AcquisitionModeSetup/DimensionY"
-        ).text
-    )
-    z_pixels = float(
-        fh.meta.find(
-            "Metadata/Experiment/ExperimentBlocks/AcquisitionBlock/AcquisitionModeSetup/DimensionZ"
-        ).text
-    )
+    # Voxel size is in meters. Load and convert to microns.
+    x_size = float(fh.meta.find(".//Scaling/Items/Distance[@Id='X']/Value").text)
+    y_size = float(fh.meta.find(".//Scaling/Items/Distance[@Id='Y']/Value").text)
+    try:
+        z_size = float(fh.meta.find(".//Scaling/Items/Distance[@Id='Z']/Value").text)
+    except AttributeError:
+        z_size = x_size
+    voxel_size = np.array([x_size, y_size, z_size]) * 1e6
 
-    x_scaling = float(
-        fh.meta.find(
-            "Metadata/Experiment/ExperimentBlocks/AcquisitionBlock/AcquisitionModeSetup/ScalingX"
-        ).text
-    )
-    y_scaling = float(
-        fh.meta.find(
-            "Metadata/Experiment/ExperimentBlocks/AcquisitionBlock/AcquisitionModeSetup/ScalingY"
-        ).text
-    )
-    z_scaling = float(
-        fh.meta.find(
-            "Metadata/Experiment/ExperimentBlocks/AcquisitionBlock/AcquisitionModeSetup/ScalingZ"
-        ).text
-    )
+    # Stage position is in microns?
+    try:
+        x_pos = float(fh.meta.find(".//ParameterCollection[@Id='MTBStageAxisX'/Position").text)
+    except TypeError:
+        x_pos = 0
+    try:
+        y_pos = float(fh.meta.find(".//ParameterCollection[@Id='MTBStageAxisY'/Position").text)
+    except TypeError:
+        y_pos = 0
+    z_pos = 0
+    origin = np.array([x_pos, y_pos, z_pos])
 
-    x_offset = float(
-        fh.meta.find(
-            "Metadata/Experiment/ExperimentBlocks/AcquisitionBlock/AcquisitionModeSetup/OffsetX"
-        ).text
-    )
-    y_offset = float(
-        fh.meta.find(
-            "Metadata/Experiment/ExperimentBlocks/AcquisitionBlock/AcquisitionModeSetup/OffsetY"
-        ).text
-    )
-    z_offset = float(
-        fh.meta.find(
-            "Metadata/Experiment/ExperimentBlocks/AcquisitionBlock/AcquisitionModeSetup/OffsetZ"
-        ).text
-    )
+    rotation = float(fh.meta.find(".//SampleRotation").text)
 
-    node = fh.meta.find(
-        "Metadata/Information/Image/Dimensions/S/Scenes/Scene/Positions/Position"
-    )
+    # Calculate the ordering of the channels so we can return them ordered from
+    # lowest to highest emission wavelength. We don't actually need the name or
+    # color, but I am leaving these in so that we can eventually do something
+    # with them later.
+    channel_config = []
+    for i, c in enumerate(fh.meta.findall('.//Channel[@IsActivated="true"]')):
+        color = c.find('Color').text
+        name = c.find('FluorescenceDye/ShortName').text
+        emission = int(c.find('AdditionalDyeInformation/DyeMaxEmission').text)
+        channel_config.append((i, name, color, emission))
+    channel_config.sort(key=lambda x: x[-1])
+    channel_order = [c[0] for c in channel_config]
 
-    info = {}
-    info["offset"] = np.array([x_offset, y_offset, z_offset])
-    info["pixels"] = np.array([x_pixels, y_pixels, z_pixels]).astype("i")
-    info["scaling"] = np.array([x_scaling, y_scaling, z_scaling])
-    info["origin"] = np.array([float(v) * 1e-6 for k, v in node.items()])
-    info["lower"] = info["origin"]
-    info["extent"] = info["pixels"] * info["scaling"]
-    info["upper"] = info["lower"] + info["extent"]
-    del info["pixels"]
+    channels = []
+    for c in filename.parent.stem.split('-')[2:]:
+        if c in ('63x', '20x', '10x', 'CellCount'):
+            continue
+        channels.append({'name': c})
 
-    img = fh.read_image()[0][0, 0, 0]
+    # Note that all units should be in microns since this is the most logical
+    # unit for a confocal analysis.
+    info = {
+        # XYZ voxel size in microns (um).
+        'voxel_size': voxel_size.astype(float).tolist(),
+        # XYZ origin in microns (um).
+        'lower': origin.astype(float).tolist(),
+        # Store version number of cochleogram along with the data (in case we
+        # need to recover this later to figure out bugs).
+        'version': version('cochleogram'),
+        # Reader used to read in data
+        'reader': 'czi',
+        'channels': channels,
+        'rotation': rotation,
+    }
 
-    # First, do the zoom. This is the best time to handle it before we do
-    # additional manipulations.
-    zoom = max_xy / max(x_pixels, y_pixels)
-    if zoom < 1:
-        img = np.concatenate([ndimage.zoom(i, (1, zoom, zoom))[np.newaxis] for i in img])
-        info["scaling"][:2] /= zoom
-
-    # Initial ordering is czyx
-    #                     0123
-    # Final ordering      xyzc
-    img = img.swapaxes(0, 3).swapaxes(1, 2)
-
-    # Add a third channel to allow for RGB images
-    padding = [(0, 0)] * img.ndim
-    padding[-1] = (0, 1)
-    img = np.pad(img, padding, "constant")
-
-    # Rescale to range 0 ... 1
-    img = img / img.max(axis=(0, 1, 2), keepdims=True)
-    if 'int' in dtype:
+    dims = dict(zip(fh.dims, fh.size))
+    c_set = []
+    for c in range(dims['C']):
+        z_stack = []
+        for z in range(dims['Z']):
+            i = fh.read_mosaic(Z=z, C=c).squeeze()
+            z_stack.append(i[..., np.newaxis])
+        c_set.append(np.concatenate(z_stack, axis=-1)[..., np.newaxis])
+    img = np.concatenate(c_set, axis=-1)
+    img = img / img.max(axis=(0, 1, 2))
+    if 'in' in dtype:
         img *= 255
-    img = img.astype(dtype)
 
-    cache_filename.parent.mkdir(exist_ok=True, parents=True)
-    with cache_filename.open("wb") as fh:
-        pickle.dump((info, img), fh, pickle.HIGHEST_PROTOCOL)
-
+    # Coerce to dtype, reorder so that tile origin is in lower corner of image
+    # (makes it easer to reconcile with plotting), and swap axes from YX to XY.
+    # Final axes ordering should be XYZC where C is channel and origin of XY
+    # should be in lower corner of screen. We also reorder the channels based
+    # on their emission wavelength (i.e., lowest to highest wavelength) since
+    # that's what's saved in the filename.
+    img = img.astype(dtype)[::-1, :, :, channel_order].swapaxes(0, 1)
     return info, img
 
 

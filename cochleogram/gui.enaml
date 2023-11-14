@@ -43,7 +43,7 @@ def bind(figure, presenter):
 ################################################################################
 # Cochlea reader functions 
 ################################################################################
-def open_processed_cochlea_dataset(window):
+def open_cochlea_dataset(window, reader, pathtype):
     # Check for unsaved changes
     if any(p.unsaved_changes for p in window.presenters):
         q = 'There are unsaved changes. Your current analysis will be lost. Are you sure?'
@@ -51,22 +51,25 @@ def open_processed_cochlea_dataset(window):
         if button is None or button.text == 'No':
             return
 
-    path = FileDialogEx.get_existing_directory(window, current_path=str(window.current_path))
+    if pathtype == 'dir':
+        fn = FileDialogEx.get_existing_directory
+    elif pathtype == 'file':
+        fn = FileDialogEx.get_open_file_name
+    path = fn(window, current_path=str(window.current_path))
     if path:
-        load_cochlea_dataset(path, window, readers.ProcessedCochleaReader)
+        load_cochlea_dataset(path, window, reader)
+
+
+def open_processed_cochlea_dir(window):
+    return open_cochlea_dataset(window, readers.ProcessedCochleaReader, 'dir')
 
 
 def open_lif_cochlea_file(window):
-    # Check for unsaved changes
-    if any(p.unsaved_changes for p in window.presenters):
-        q = 'There are unsaved changes. Your current analysis will be lost. Are you sure?'
-        button = question(None, 'Confirm action', q)
-        if button is None or button.text == 'No':
-            return
+    return open_cochlea_dataset(window, readers.LIFCochleaReader, 'file')
 
-    path = FileDialogEx.get_open_file_name(window, current_path=str(window.current_path))
-    if path:
-        load_cochlea_dataset(path, window, readers.LIFCochleaReader)
+
+def open_czi_cochlea_dir(window):
+    return open_cochlea_dataset(window, readers.CZICochleaReader, 'dir')
 
 
 def load_cochlea_dataset(path, window, reader_class=None):
@@ -763,10 +766,10 @@ enamldef CochleagramWindow(MainWindow): window:
         Menu:
             title = '&File'
             Action:
-                text = 'Open processed dataset containing full cochlea scan'
+                text = 'Open processed directory containing full cochlea scan'
                 triggered ::
                     try:
-                        open_processed_cochlea_dataset(window)
+                        open_processed_cochlea_dir(window)
                     except IOError as e:
                         log.exception(e)
                         critical(window, 'Load', str(e))
@@ -776,6 +779,15 @@ enamldef CochleagramWindow(MainWindow): window:
                 triggered ::
                     try:
                         open_lif_cochlea_file(window)
+                    except IOError as e:
+                        log.exception(e)
+                        critical(window, 'Load', str(e))
+
+            Action:
+                text = 'Open CZI directory containing full cochlea scan'
+                triggered ::
+                    try:
+                        open_czi_cochlea_dir(window)
                     except IOError as e:
                         log.exception(e)
                         critical(window, 'Load', str(e))

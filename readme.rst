@@ -12,24 +12,58 @@ align multiple confocal z-stacks for a single piece.
 Datasets
 --------
 
-Right now only Leica LIF files are supported. At one time we had support for
-the Zeiss CZI format but it needs to be updated to work with the current
-version of the program.
-
 Naming conventions for LIF files
 ................................
 
-Files should be named with the identifier (e.g., animal ID and ear) followed
-byt the label for each channel in the order the channels were imaged. For
-example:
+All Z-stacks for a single cochlea should be stored in a single LIF file. Files
+should be named with the identifier (e.g., animal ID and ear) followed by the
+label for each channel in the order the channels were imaged. For example:
 
-    B009-8L-CtBP2-MyosinVIIa-PMT
+    B009-8L-GluR2-CtBP2-MyosinVIIa
 
 Inside each file, the pieces must be numbered sequentially from base (hook) to
-apex. If more htan one image is required for a piece, use letters for the
+apex. If more than one image is required for a piece, use letters for the
 suffixes (i.e., "piece_2a", "piece_2b", etc.). The order in which the images
 for a single piece are labeled does not matter since the program will
 automatically align them based on the stage coordinates stored in the file.
+
+To exclude an image, add an underscore to the beginning of the stack name,
+e.g.:
+
+    _piece_2a_high_power
+
+Naming conventions for CZI data
+...............................
+
+All Z-stacks for a single cochlea should be stored in a single folder. Folders
+should be named with the identifier (e.g., animal ID and ear) followed by the
+label for each channel in the order the channels were imaged. For example:
+
+    B009-8L-GluR2-CtBP2-MyosinVIIa
+
+Inside teh folder, each Z-stack should be numbered sequentially from base
+(hook) to apex. If more than one image is required for a piece (e.g., because
+you are not using tile mode), use letters for the suffixes (i.e., "piece_2a",
+"piece_2b", etc.). The order in which the images for a single piece are labeled
+does not matter since the program will automatically align them based on the
+stage coordinates stored in the file. An example of the filenames that could be
+found in the folder:
+
+    BP1-FL_piece_1.czi
+    BP1-FL_piece_2.czi
+    BP1-FL_piece_3.czi
+    BP1-FL_piece_4a.czi
+    BP1-FL_piece_4b.czi
+    BP1-FL_piece_5.czi
+
+The underscore before and after `piece` is important. The pieces should be
+numbered sequentially from hook (starting at 1) to apex. If the field of
+view is too small to capture the full piece and you are not using tiling,
+you can add a letter suffix after the piece number (e.g., "a", "b", etc.).
+
+To exclude an image, add an underscore to the beginning of the filename, e.g.:
+
+    _BP1-FL_piece_5.czi
 
 Missing pieces
 ..............
@@ -37,7 +71,7 @@ Missing pieces
 If a piece is missing, you can copy the image stacks for a matching piece from
 another file (for LIF files, you can use LAS X Office). To indicate that the
 piece is a copy, it must have the suffix `copied_<note>`. For example, if you
-copy piece_4a and piece_4b from B009-8L to the file containing data for
+copy piece_4a and piece_4b from B009-8L to the file/folder containing data for
 B021-3L, the copied images should be named "piece_4a_copy_B009-8L" and
 "piece_4b_copy_B009-8L". The note will appear in the composite generated for
 the frequency map.
