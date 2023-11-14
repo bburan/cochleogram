@@ -57,7 +57,7 @@ class CochleaReader(BaseReader):
     '''
     Reads an entire cochlea
 
-    This expects multpile images with at least one image per piece, possibly
+    This expects multiple images with at least one image per piece, possibly
     more if the entire piece did not fit inside the field of view.
     '''
 
@@ -72,12 +72,60 @@ class CochleaReader(BaseReader):
     def state_filename(self, piece):
         return self.save_path() / f'{self.path.stem}_piece_{piece.piece}_analysis.json'
 
+    def load_piece(self, piece, stack_names):
+        tiles = [self._load_tile(sn) for sn in stack_names]
+
+        copy = re.compile(fr'^piece_{piece}\w?_copied_([\w-]+)')
+        copied = set()
+        for sn in stack_names:
+            if (m := copy.match(sn)) is not None:
+                copied.add(m.group(1))
+        copied = ', '.join(sorted(copied))
+
+        # This pads the z-axis so that we have empty slices above/below stacks
+        # such that they should align properly in z-space. This simplifies a
+        # few downstream operations.
+        slice_n = np.array([t.image.shape[2] for t in tiles])
+        slice_lb = np.array([t.extent[4] for t in tiles])
+        slice_ub = np.array([t.extent[5] for t in tiles])
+        slice_scale = np.array([t.info['voxel_size'][2] for t in tiles])
+
+        z_scale = slice_scale[0]
+        z_min = min(slice_lb)
+        z_max = max(slice_ub)
+        z_n = int(np.ceil((z_max - z_min) / z_scale))
+
+        pad_bottom = np.round((slice_lb - z_min) / z_scale).astype('i')
+        pad_top = (z_n - pad_bottom - slice_n).astype('i')
+
+        for (t, pb, pt) in zip(tiles, pad_bottom, pad_top):
+            padding = [(0, 0), (0, 0), (pb, pt), (0, 0)]
+            t.image = np.pad(t.image, padding)
+            t.extent[4:] = [z_min, z_max]
+
+        return model.Piece(tiles, piece, copied_from=copied)
+
+    def _load_collection(self):
+        pieces = [self.load_piece(p, sn) for p, sn in self.list_pieces().items()]
+        if len(pieces) == 0:
+            raise IOError(f'No pieces found in {self.path}')
+        return model.Cochlea(pieces)
+
+    def list_pieces(self):
+        raise NotImplementedError
+
+    def _load_tile(self, stack_name):
+        raise NotImplementedError
+
+    def save_path(self):
+        raise NotImplementedError
+
 
 class LIFCochleaReader(CochleaReader):
     '''
     Reads an entire cochlea from a LIF file.
 
-    This expects multpile images with at least one image per piece, possibly
+    This expects multiple images with at least one image per piece, possibly
     more if the entire piece did not fit inside the field of view. All images
     should be saved to the same LIF file and contain the piece numbers.
     '''
@@ -102,45 +150,6 @@ class LIFCochleaReader(CochleaReader):
         name = f'{self.path.stem}_{stack_name}'
         return model.Tile(info, img, name)
 
-    def load_piece(self, piece, stack_names):
-        tiles = [self._load_tile(sn) for sn in stack_names]
-
-        copy = re.compile(fr'^piece_{piece}\w?_copied_([\w-]+)')
-        copied = set()
-        for sn in stack_names:
-            if (m := copy.match(sn)) is not None:
-                copied.add(m.group(1))
-        copied = ', '.join(sorted(copied))
-
-        # This pads the z-axis so that we have empty slices above/below stacks
-        # such that they should align properly in z-space. This simplifies a
-        # few downstream operations.
-        slice_n = np.array([t.image.shape[2] for t in tiles])
-        slice_lb = np.array([t.extent[4] for t in tiles])
-        slice_ub = np.array([t.extent[5] for t in tiles])
-        slice_scale = np.array([t.info['voxel_size'][2] for t in tiles])
-
-        z_scale = slice_scale[0]
-        z_min = min(slice_lb)
-        z_max = max(slice_ub)
-        z_n = int(np.ceil((z_max - z_min) / z_scale))
-
-        pad_bottom = np.round((slice_lb - z_min) / z_scale).astype('i')
-        pad_top = (z_n - pad_bottom - slice_n).astype('i')
-
-        for (t, pb, pt) in zip(tiles, pad_bottom, pad_top):
-            padding = [(0, 0), (0, 0), (pb, pt), (0, 0)]
-            t.image = np.pad(t.image, padding)
-            t.extent[4:] = [z_min, z_max]
-
-        return model.Piece(tiles, piece, copied_from=copied)
-
-    def _load_collection(self):
-        pieces = [self.load_piece(p, sn) for p, sn in self.list_pieces().items()]
-        if len(pieces) == 0:
-            raise IOError(f'No pieces found in {self.path}')
-        return model.Cochlea(pieces)
-
     def save_path(self):
         return self.path.parent / self.path.stem
 
@@ -150,30 +159,9 @@ class CZICochleaReader(CochleaReader):
     Reads an entire cochlea from a folder containing multiple CZI files (one
     image per file).
 
-    This expects multpile images with at least one image per piece, possibly
-    more if the entire piece did not fit inside the field of view. All files
-    should be in the same folder and contain the piece numbers, e.g.:
-
-        BP1-FL_piece_1.czi
-        BP1-FL_piece_2.czi
-        BP1-FL_piece_3.czi
-        BP1-FL_piece_4a.czi
-        BP1-FL_piece_4b.czi
-        BP1-FL_piece_5.czi
-
-    The underscore before and after `piece` is important. The pieces should be
-    numbered sequentially from hook (starting at 1) to apex. If the field of
-    view is too small to capture the full piece and you are not using tiling,
-    you can add a letter suffix after the piece number (e.g., "a", "b", etc.).
-
-    To exclude an image, add an underscore to the beginning of the filename, e.g.:
-
-        _BP1-FL_piece_5.czi
-
-    Files should be named with the identifier (e.g., animal ID and ear) followed
-    by the label for each channel in order of emission wavelength of the dye, e.g.:
-
-        B009-8L-GluR2-CtBP2-MyosinVIIa
+    This expects multiple images with at least one image per piece, possibly
+    more if the entire piece did not fit inside the field of view. All images
+    should be saved to the same folder and contain the piece numbers.
     '''
     def list_pieces(self):
         p_piece = re.compile('^(?!_).*piece_(\d+)\w?')
@@ -192,48 +180,6 @@ class CZICochleaReader(CochleaReader):
         name = f'{self.path.stem}_{stack_name}'
         return model.Tile(info, img, name)
 
-    def load_piece(self, piece, stack_names):
-        tiles = [self._load_tile(sn) for sn in stack_names]
-
-        copy = re.compile(fr'^piece_{piece}\w?_copied_([\w-]+)')
-        copied = set()
-        for sn in stack_names:
-            if (m := copy.match(sn)) is not None:
-                copied.add(m.group(1))
-        copied = ', '.join(sorted(copied))
-
-        # This pads the z-axis so that we have empty slices above/below stacks
-        # such that they should align properly in z-space. This simplifies a
-        # few downstream operations.
-        slice_n = np.array([t.image.shape[2] for t in tiles])
-        slice_lb = np.array([t.extent[4] for t in tiles])
-        slice_ub = np.array([t.extent[5] for t in tiles])
-        slice_scale = np.array([t.info['voxel_size'][2] for t in tiles])
-
-        z_scale = slice_scale[0]
-        z_min = min(slice_lb)
-        z_max = max(slice_ub)
-        if z_min == z_max:
-            z_n = 1
-        else:
-            z_n = int(np.ceil((z_max - z_min) / z_scale))
-
-        pad_bottom = np.round((slice_lb - z_min) / z_scale).astype('i')
-        pad_top = (z_n - pad_bottom - slice_n).astype('i')
-
-        for (t, pb, pt) in zip(tiles, pad_bottom, pad_top):
-            padding = [(0, 0), (0, 0), (pb, pt), (0, 0)]
-            t.image = np.pad(t.image, padding)
-            t.extent[4:] = [z_min, z_max]
-
-        return model.Piece(tiles, piece, copied_from=copied)
-
-    def _load_collection(self):
-        pieces = [self.load_piece(p, sn) for p, sn in self.list_pieces().items()]
-        if len(pieces) == 0:
-            raise IOError(f'No pieces found in {self.path}')
-        return model.Cochlea(pieces)
-
     def save_path(self):
         return self.path.parent / self.path.stem
 
@@ -242,58 +188,18 @@ class ProcessedCochleaReader(CochleaReader):
 
     def list_pieces(self):
         p_piece = re.compile('.*piece_(\d+)\w?')
-        pieces = []
+        pieces = {}
         for path in self.path.glob('*piece_*.*'):
             if path.name.endswith('.json'):
                 continue
             piece = int(p_piece.match(path.stem).group(1))
-            pieces.append(piece)
-        return sorted(set(pieces))
+            pieces.setdefault(piece, []).append(path.stem)
+        return {p: pieces[p] for p in sorted(pieces)}
 
-    def _load_tile(self, filename):
-        image = np.load(filename)
+    def _load_tile(self, stack_name):
+        image = np.load(f'{stack_name}.npy')
         info = json.loads(filename.with_suffix('.json').read_text())
         return model.Tile(info, image, filename.stem)
-
-    def load_piece(self, piece):
-        tile_filenames = sorted(self.path.glob(f"*piece_{piece}*.npy"))
-        log.info('Found tiles: %r', [t.stem for t in tile_filenames])
-        tiles = [self._load_tile(f) for f in tile_filenames]
-
-        copy = re.compile(fr'^.*piece_{piece}\w?_copied_([\w-]+)')
-        copied = set()
-        for tf in tile_filenames:
-            if (m := copy.match(tf.stem)) is not None:
-                copied.add(m.group(1))
-        copied = ', '.join(sorted(copied))
-
-        # This pads the z-axis so that we have empty slices above/below stacks
-        # such that they should align properly in z-space. This simplifies a
-        # few downstream operations.
-        slice_n = np.array([t.image.shape[2] for t in tiles])
-        slice_lb = np.array([t.extent[4] for t in tiles])
-        slice_ub = np.array([t.extent[5] for t in tiles])
-        slice_scale = np.array([t.info['voxel_size'][2] for t in tiles])
-
-        z_scale = slice_scale[0]
-        z_min = min(slice_lb)
-        z_max = max(slice_ub)
-        z_n = int(np.ceil((z_max - z_min) / z_scale))
-
-        pad_bottom = np.round((slice_lb - z_min) / z_scale).astype('i')
-        pad_top = (z_n - pad_bottom - slice_n).astype('i')
-
-        for (t, pb, pt) in zip(tiles, pad_bottom, pad_top):
-            padding = [(0, 0), (0, 0), (pb, pt), (0, 0)]
-            t.image = np.pad(t.image, padding)
-            t.extent[4:] = [z_min, z_max]
-        return model.Piece(tiles, piece, copied_from=copied)
-
-    def _load_collection(self):
-        pieces = [self.load_piece(p) for p in self.list_pieces()]
-        if len(pieces) == 0:
-            raise IOError(f'No pieces found in {self.path}')
-        return model.Cochlea(pieces)
 
     def save_path(self):
         return self.path
