@@ -101,7 +101,7 @@ def load_cochlea_dataset(path, window, reader_class=None):
 ################################################################################
 # 63x functions (i.e., cochleogram counts)
 ################################################################################
-def open_lif_file_for_HC_counts(window):
+def open_folder_for_HC_counts(window, reader, pathtype):
     # Check for unsaved changes
     if any(p.unsaved_changes for p in window.presenters):
         q = 'There are unsaved changes. Your current analysis will be lost. Are you sure?'
@@ -109,9 +109,21 @@ def open_lif_file_for_HC_counts(window):
         if button is None or button.text == 'No':
             return
 
-    path = FileDialogEx.get_open_file_name(window, current_path=str(window.current_path))
+    if pathtype == 'dir':
+        fn = FileDialogEx.get_existing_directory
+    elif pathtype == 'file':
+        fn = FileDialogEx.get_open_file_name
+    path = fn(window, current_path=str(window.current_path))
     if path:
-        load_tile_dataset(path, window, readers.LIFTileReader)
+        load_tile_dataset(path, window, reader)
+
+
+def open_lif_folder_for_HC_counts(window):
+    return open_folder_for_HC_counts(window, readers.LIFTileReader, 'file')
+
+
+def open_czi_folder_for_HC_counts(window):
+    return open_folder_for_HC_counts(window, readers.CZITileReader, 'dir')
 
 
 def load_tile_dataset(path, window, reader_class=None):

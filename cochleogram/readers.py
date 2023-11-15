@@ -215,6 +215,22 @@ class TileReader(BaseReader):
         self.path = Path(path)
         self.pattern = re.compile(pattern)
 
+    def _load_collection(self):
+        tiles = [self.load_tile(r) for r in self.list_tiles()]
+        return model.TileAnalysisCollection(tiles=tiles)
+
+    def state_filename(self, obj):
+        return self.save_path() / f'{obj.name}_analysis.json'
+
+    def load_tile(self, tile_name):
+        raise NotImplementedError
+
+    def list_tiles(self):
+        raise NotImplementedError
+
+    def save_path(self):
+        raise NotImplementedError
+
 
 class LIFTileReader(TileReader):
 
@@ -222,10 +238,6 @@ class LIFTileReader(TileReader):
         from readlif.reader import LifFile
         super().__init__(path, pattern)
         self.fh = LifFile(path)
-
-    def _load_collection(self):
-        tiles = [self.load_tile(r) for r in self.list_tiles()]
-        return model.TileAnalysisCollection(tiles=tiles)
 
     def load_tile(self, tile_name):
         info, img = util.load_lif(self.path, tile_name)
@@ -245,5 +257,20 @@ class LIFTileReader(TileReader):
     def save_path(self):
         return self.path.parent / self.path.stem
 
-    def state_filename(self, obj):
-        return self.save_path() / f'{obj.name}_analysis.json'
+
+class CZITileReader(TileReader):
+
+    def load_tile(self, tile_name):
+        filename = self.path / f'{tile_name}.czi'
+        info, img = util.load_czi(filename)
+        tile = model.Tile(info, img, source=tile_name)
+        return model.TileAnalysis(tile, name=tile_name)
+
+    def list_tiles(self):
+        tile_names = {}
+        for img in self.path.glob('*.czi'):
+            tile_names[img.stem] = img.stem
+        return tile_names
+
+    def save_path(self):
+        return self.path
