@@ -12,10 +12,10 @@ from enaml.layout.api import align, hbox, InsertTab, RemoveItem, spacer, TabLayo
 from enaml.stdlib.fields import FloatField
 from enaml.stdlib.message_box import critical, information, question
 from enaml.qt.QtCore import Qt
-from enaml.widgets.api import (Action, ButtonGroup, CheckBox, Container,
-                               DockArea, DockItem, DualSlider, Feature,
-                               FileDialogEx, Form, HGroup, Html, Label,
-                               MainWindow, Menu, MenuBar, MPLCanvas,
+from enaml.widgets.api import (Action, ActionGroup, ButtonGroup, CheckBox,
+                               Container, DockArea, DockItem, DualSlider,
+                               Feature, FileDialogEx, Form, HGroup, Html,
+                               Label, MainWindow, Menu, MenuBar, MPLCanvas,
                                ObjectCombo, PopupView, ProgressBar, PushButton,
                                Slider, VGroup, Window)
 
@@ -777,44 +777,51 @@ enamldef CochleagramWindow(MainWindow): window:
     MenuBar:
         Menu:
             title = '&File'
-            Action:
-                text = 'Open processed directory containing full cochlea scan'
-                triggered ::
-                    try:
-                        open_processed_cochlea_dir(window)
-                    except IOError as e:
-                        log.exception(e)
-                        critical(window, 'Load', str(e))
 
-            Action:
-                text = 'Open LIF file containing full cochlea scan'
-                triggered ::
-                    try:
-                        open_lif_cochlea_file(window)
-                    except IOError as e:
-                        log.exception(e)
-                        critical(window, 'Load', str(e))
-
-            Action:
-                text = 'Open CZI directory containing full cochlea scan'
-                triggered ::
-                    try:
-                        open_czi_cochlea_dir(window)
-                    except IOError as e:
-                        log.exception(e)
-                        critical(window, 'Load', str(e))
-
-            Action:
-                separator = True
-
-            Action:
-                text = 'Count cells in each tile of a LIF file\tCtrl+C'
-                triggered ::
-                    try:
-                        open_lif_file_for_HC_counts(window)
-                    except IOError as e:
-                        log.exception(e)
-                        critical(window, 'Load', str(e))
+            Menu:
+                title = 'Full cochlea scan'
+                Action:
+                    text = 'Processed directory'
+                    triggered ::
+                        try:
+                            open_processed_cochlea_dir(window)
+                        except IOError as e:
+                            log.exception(e)
+                            critical(window, 'Load', str(e))
+                Action:
+                    text = 'LIF file'
+                    triggered ::
+                        try:
+                            open_lif_cochlea_file(window)
+                        except IOError as e:
+                            log.exception(e)
+                            critical(window, 'Load', str(e))
+                Action:
+                    text = 'CZI folder'
+                    triggered ::
+                        try:
+                            open_czi_cochlea_dir(window)
+                        except IOError as e:
+                            log.exception(e)
+                            critical(window, 'Load', str(e))
+            Menu:
+                title = 'ROI scans'
+                Action:
+                    text = 'LIF file'
+                    triggered ::
+                        try:
+                            open_lif_folder_for_HC_counts(window)
+                        except IOError as e:
+                            log.exception(e)
+                            critical(window, 'Load', str(e))
+                Action:
+                    text = 'CZI folder'
+                    triggered ::
+                        try:
+                            open_czi_folder_for_HC_counts(window)
+                        except IOError as e:
+                            log.exception(e)
+                            critical(window, 'Load', str(e))
 
             Action:
                 separator = True
