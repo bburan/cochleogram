@@ -650,6 +650,9 @@ class Cochlea:
     def __iter__(self):
         yield from self.pieces
 
+    def __len__(self):
+        return len(self.pieces)
+
     @property
     def channel_names(self):
         # We assume that each tile has the same set of channels
@@ -756,3 +759,6 @@ class TileAnalysisCollection:
 
     def __iter__(self):
         yield from self.tiles
+
+    def __len__(self):
+        return len(self.tiles)
