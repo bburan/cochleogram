@@ -435,14 +435,6 @@ def _find_ims_converter():
     return str(next(path.glob('**/ImarisConvert.exe')))
 
 
-#def find_cells_watershed(img, debug=False):
-#    if debug:
-#        figure, axes = plt.a
-#    img_gray = img.mean(axis=-1)
-#    elevation = sobel(img_gray)
-
-
-
 def lif_to_ims(filename, reprocess=False, cb=None):
     filename = Path(filename)
     converter = _find_ims_converter()
@@ -456,6 +448,24 @@ def lif_to_ims(filename, reprocess=False, cb=None):
         args = [converter, '-i', str(filename), '-ii', str(ii), '-o', str(outfile)]
         subprocess.check_output(args)
         progress = int((j + 1) / n_stacks * 100)
+        cb(progress)
+
+
+def czi_to_ims(path, reprocess=False, cb=None):
+    path = Path(path)
+    converter = _find_ims_converter()
+    if cb is None:
+        cb = lambda x: x
+    filenames = list(path.glob('*IHC*.czi'))
+    print(filenames)
+    n_files = len(filenames)
+    for j, filename in enumerate(filenames):
+        outfile = filename.parent / 'imaris' / f'{filename.stem}.ims'
+        outfile.parent.mkdir(exist_ok=True, parents=True)
+        args = [converter, '-i', str(filename), '-o', str(outfile)]
+        print(args)
+        subprocess.check_output(args)
+        progress = int((j + 1) / n_files * 100)
         cb(progress)
 
 
@@ -477,4 +487,3 @@ def guess_cells(tile, spiral, width, spacing, channel, z_slice):
     log.info('Shifted points up to %.0f x %.0f microns',
                 np.max(np.abs(xnc - xn)), np.max(np.abs(ync - yn)))
     return xnc, ync
-

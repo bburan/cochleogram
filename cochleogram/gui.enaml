@@ -826,31 +826,34 @@ enamldef CochleagramWindow(MainWindow): window:
             Action:
                 separator = True
 
-            Action:
-                text = 'Process LIF file\tCtrl+P'
-                triggered ::
-                    path = FileDialogEx.get_open_file_name(window, current_path=str(window.current_path))
-                    if path:
-                        pp = ProgressWindow()
-                        pp.show()
-                        cb = lambda x, pp=pp: setattr(pp, 'progress', x)
-                        deferred_call(util.process_lif, path, reprocess=True, cb=cb)
+            Menu:
+                title = 'Convert to Imaris'
+                Action:
+                    text = 'LIF file'
+                    triggered ::
+                        path = FileDialogEx.get_open_file_name(window, current_path=str(window.current_path))
+                        if path:
+                            pp = ProgressWindow()
+                            pp.show()
+                            cb = lambda x, pp=pp: setattr(pp, 'progress', x)
+                            deferred_call(util.lif_to_ims, path, reprocess=True, cb=cb)
+                Action:
+                    text = 'CZI folder'
+                    triggered ::
+                        path = FileDialogEx.get_existing_directory(window, current_path=str(window.current_path))
+                        if path:
+                            pp = ProgressWindow()
+                            pp.show()
+                            cb = lambda x, pp=pp: setattr(pp, 'progress', x)
+                            deferred_call(util.czi_to_ims, path, reprocess=True, cb=cb)
 
             Action:
-                text = 'Convert LIF file to Imaris\tCtrl+P'
-                triggered ::
-                    path = FileDialogEx.get_open_file_name(window, current_path=str(window.current_path))
-                    if path:
-                        pp = ProgressWindow()
-                        pp.show()
-                        cb = lambda x, pp=pp: setattr(pp, 'progress', x)
-                        deferred_call(util.lif_to_ims, path, reprocess=True, cb=cb)
+                separator = True
 
             Action:
                 text = 'Save analysis\tCtrl+S'
                 triggered ::
                     save_state(window, window.presenters)
-
             Action:
                 text = 'Load analysis\tCtrl+L'
                 triggered ::
