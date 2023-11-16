@@ -2,8 +2,8 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
 <meta charset="utf-8" />
+<meta name="generator" content="Docutils 0.20.1: https://docutils.sourceforge.io/" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
 <title>Cochleogram</title>
 <style type="text/css">
 
@@ -291,7 +291,7 @@ p img, p video, figure img, figure video {
 /* Rules for easy reading and pre-defined style variants.                  */
 /*                                                                         */
 /* :Author: Günter Milde, based on html4css1.css by David Goodger          */
-/* :Id: $Id: plain.css 9081 2022-06-19 20:23:12Z milde $                                                               */
+/* :Id: $Id: plain.css 9338 2023-04-08 21:08:47Z milde $                                                               */
 /* :Copyright: © 2015 Günter Milde.                                        */
 /* :License: Released under the terms of the `2-Clause BSD license`_,      */
 /*    in short:                                                            */
@@ -570,7 +570,8 @@ math .boldsymbol {
   font-weight: bold;
 }
 mstyle.mathscr, mi.mathscr {
-  font-family: STIX;
+  font-family: STIX, XITSMathJax_Script, rsfs10,
+               "Asana Math", Garamond, cursive;
 }
 
 /* Epigraph           */
@@ -615,29 +616,55 @@ align multiple confocal z-stacks for a single piece.</p>
 </section>
 <section id="datasets">
 <h2>Datasets</h2>
-<p>Right now only Leica LIF files are supported. At one time we had support for
-the Zeiss CZI format but it needs to be updated to work with the current
-version of the program.</p>
 <section id="naming-conventions-for-lif-files">
 <h3>Naming conventions for LIF files</h3>
-<p>Files should be named with the identifier (e.g., animal ID and ear) followed
-byt the label for each channel in the order the channels were imaged. For
-example:</p>
-<blockquote>
-<p>B009-8L-CtBP2-MyosinVIIa-PMT</p>
-</blockquote>
+<p>All Z-stacks for a single cochlea should be stored in a single LIF file. Files
+should be named with the identifier (e.g., animal ID and ear) followed by the
+label for each channel in the order the channels were imaged. For example:</p>
+<pre class="literal-block">B009-8L-GluR2-CtBP2-MyosinVIIa</pre>
 <p>Inside each file, the pieces must be numbered sequentially from base (hook) to
-apex. If more htan one image is required for a piece, use letters for the
+apex. If more than one image is required for a piece, use letters for the
 suffixes (i.e., &quot;piece_2a&quot;, &quot;piece_2b&quot;, etc.). The order in which the images
 for a single piece are labeled does not matter since the program will
 automatically align them based on the stage coordinates stored in the file.</p>
+<p>To exclude an image, add an underscore to the beginning of the stack name,
+e.g.:</p>
+<pre class="literal-block">_piece_2a_high_power</pre>
+</section>
+<section id="naming-conventions-for-czi-data">
+<h3>Naming conventions for CZI data</h3>
+<p>All Z-stacks for a single cochlea should be stored in a single folder. Folders
+should be named with the identifier (e.g., animal ID and ear) followed by the
+label for each channel in the order the channels were imaged. For example:</p>
+<blockquote>
+<p>B009-8L-GluR2-CtBP2-MyosinVIIa</p>
+</blockquote>
+<p>Inside teh folder, each Z-stack should be numbered sequentially from base
+(hook) to apex. If more than one image is required for a piece (e.g., because
+you are not using tile mode), use letters for the suffixes (i.e., &quot;piece_2a&quot;,
+&quot;piece_2b&quot;, etc.). The order in which the images for a single piece are labeled
+does not matter since the program will automatically align them based on the
+stage coordinates stored in the file. An example of the filenames that could be
+found in the folder:</p>
+<pre class="literal-block">BP1-FL_piece_1.czi
+BP1-FL_piece_2.czi
+BP1-FL_piece_3.czi
+BP1-FL_piece_4a.czi
+BP1-FL_piece_4b.czi
+BP1-FL_piece_5.czi</pre>
+<p>The underscore before and after <cite>piece</cite> is important. The pieces should be
+numbered sequentially from hook (starting at 1) to apex. If the field of
+view is too small to capture the full piece and you are not using tiling,
+you can add a letter suffix after the piece number (e.g., &quot;a&quot;, &quot;b&quot;, etc.).</p>
+<p>To exclude an image, add an underscore to the beginning of the filename, e.g.:</p>
+<pre class="literal-block">_BP1-FL_piece_5.czi</pre>
 </section>
 <section id="missing-pieces">
 <h3>Missing pieces</h3>
 <p>If a piece is missing, you can copy the image stacks for a matching piece from
 another file (for LIF files, you can use LAS X Office). To indicate that the
-piece is a copy, it must have the suffix <cite>copied_&lt;note&gt;</cite>. For example, if you
-copy piece_4a and piece_4b from B009-8L to the file containing data for
+piece is a copy, it must have the suffix <cite>_copied_&lt;note&gt;</cite>. For example, if you
+copy piece_4a and piece_4b from B009-8L to the file/folder containing data for
 B021-3L, the copied images should be named &quot;piece_4a_copy_B009-8L&quot; and
 &quot;piece_4b_copy_B009-8L&quot;. The note will appear in the composite generated for
 the frequency map.</p>

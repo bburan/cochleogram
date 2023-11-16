@@ -17,7 +17,7 @@ Naming conventions for LIF files
 
 All Z-stacks for a single cochlea should be stored in a single LIF file. Files
 should be named with the identifier (e.g., animal ID and ear) followed by the
-label for each channel in the order the channels were imaged. For example:
+label for each channel in the order the channels were imaged. For example::
 
     B009-8L-GluR2-CtBP2-MyosinVIIa
 
@@ -28,7 +28,7 @@ for a single piece are labeled does not matter since the program will
 automatically align them based on the stage coordinates stored in the file.
 
 To exclude an image, add an underscore to the beginning of the stack name,
-e.g.:
+e.g.::
 
     _piece_2a_high_power
 
@@ -47,7 +47,7 @@ you are not using tile mode), use letters for the suffixes (i.e., "piece_2a",
 "piece_2b", etc.). The order in which the images for a single piece are labeled
 does not matter since the program will automatically align them based on the
 stage coordinates stored in the file. An example of the filenames that could be
-found in the folder:
+found in the folder::
 
     BP1-FL_piece_1.czi
     BP1-FL_piece_2.czi
@@ -61,7 +61,7 @@ numbered sequentially from hook (starting at 1) to apex. If the field of
 view is too small to capture the full piece and you are not using tiling,
 you can add a letter suffix after the piece number (e.g., "a", "b", etc.).
 
-To exclude an image, add an underscore to the beginning of the filename, e.g.:
+To exclude an image, add an underscore to the beginning of the filename, e.g.::
 
     _BP1-FL_piece_5.czi
 
@@ -70,7 +70,7 @@ Missing pieces
 
 If a piece is missing, you can copy the image stacks for a matching piece from
 another file (for LIF files, you can use LAS X Office). To indicate that the
-piece is a copy, it must have the suffix `copied_<note>`. For example, if you
+piece is a copy, it must have the suffix `_copied_<note>`. For example, if you
 copy piece_4a and piece_4b from B009-8L to the file/folder containing data for
 B021-3L, the copied images should be named "piece_4a_copy_B009-8L" and
 "piece_4b_copy_B009-8L". The note will appear in the composite generated for
