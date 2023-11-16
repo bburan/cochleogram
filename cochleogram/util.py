@@ -460,7 +460,7 @@ def czi_to_ims(path, reprocess=False, cb=None):
     print(filenames)
     n_files = len(filenames)
     for j, filename in enumerate(filenames):
-        outfile = filename.parent / 'imaris' / f'{filename.stem}.ims'
+        outfile = filename.parent / f'{filename.stem}.ims'
         outfile.parent.mkdir(exist_ok=True, parents=True)
         args = [converter, '-i', str(filename), '-o', str(outfile)]
         print(args)
