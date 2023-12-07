@@ -1,7 +1,7 @@
 import logging
 log = logging.getLogger(__name__)
 
-from atom.api import Atom, Bool, Dict, Event, Float, Int, List, Str, Typed
+from atom.api import Atom, Bool, Dict, Event, Int, List, Property, Str, Typed, Value
 from matplotlib import colors
 from matplotlib import transforms as T
 import numpy as np
@@ -16,16 +16,10 @@ from skimage.color import rgb2gray
 
 from raster_geometry import sphere
 
+from ndimage_enaml.model import ChannelConfig, NDImage, NDImageCollection
+
 from cochleogram import util
 from cochleogram.config import CELLS, CHANNEL_CONFIG
-
-
-class ChannelConfig(Atom):
-
-    name = Str()
-    min_value = Float(0)
-    max_value = Float(1)
-    visible = Bool(True)
 
 
 class Points(Atom):
@@ -242,240 +236,29 @@ class Points(Atom):
         self.updated = True
 
 
-class Tile(Atom):
+class Tile(NDImage):
 
-    info = Dict()
-    image = Typed(np.ndarray)
     source = Str()
-    extent = List()
-    n_channels = Int()
 
     def __init__(self, info, image, source):
-        self.info = info
-        self.image = image
+        super().__init__(info, image)
         self.source = source
-        xlb, ylb, zlb = self.info["lower"][:3]
 
-        # Images are in XYZC dimension. We need to calculate the upper extent
-        # of the image so we can properly plot it.
-        xpx, ypx, zpx = self.image.shape[:3]
-        xv, yv, zv = self.info['voxel_size'][:3]
-        xub = xlb + xpx * xv
-        yub = ylb + ypx * yv
-        zub = zlb + zpx * zv
-        self.extent = [xlb, xub, ylb, yub, zlb, zub]
-        self.n_channels = self.image.shape[-1]
+
+class CellAnalysis(NDImageCollection):
+
+    spirals = Dict()
+    cells = Dict()
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.spirals = {c: Points() for c in CELLS}
+        self.cells = {c: Points() for c in CELLS}
 
     @property
     def channel_names(self):
-        return [c['name'] for c in self.info['channels']]
-
-    def contains(self, x, y):
-        contains_x = self.extent[0] <= x <= self.extent[1]
-        contains_y = self.extent[2] <= y <= self.extent[3]
-        return contains_x and contains_y
-
-    def to_coords(self, x, y, z=None):
-        lower = self.info["lower"]
-        voxel_size = self.info["voxel_size"]
-        if z is None:
-            indices = np.c_[x, y, np.full_like(x, lower[-1])]
-        else:
-            indices = np.c_[x, y, z]
-        points = (indices * voxel_size) + lower
-        if z is None:
-            return points[:, :2].T
-        return points.T
-
-    def to_indices(self, x, y, z=None):
-        lower = self.info["lower"]
-        voxel_size = self.info["voxel_size"]
-        if z is None:
-            points = np.c_[x, y, np.full_like(x, lower[-1])]
-        else:
-            points = np.c_[x, y, z]
-        indices = (points - lower) / voxel_size
-        if z is None:
-            return indices[:, :2].T
-        return indices.T
-
-    def to_indices_delta(self, v, axis='x'):
-        if axis == 'x':
-            return v / self.info['voxel_size'][0]
-        elif axis == 'y':
-            return v / self.info['voxel_size'][1]
-        elif axis == 'z':
-            return v / self.info['voxel_size'][2]
-        else:
-            raise ValueError('Unsupported axis')
-
-    def nuclei_template(self, radius=2.5):
-        voxel_size = self.info["voxel_size"][0]
-        pixel_radius = int(np.round(radius / voxel_size))
-        template = sphere(pixel_radius * 3, pixel_radius)
-        return template / template.sum()
-
-    def get_image_extent(self, axis='z', norm=False):
-        e = np.array(self.extent).reshape((3, 2))
-        if norm:
-            e = e - e[:, [0]]
-        extent = e.ravel().tolist()
-        x = extent[0:2]
-        y = extent[2:4]
-        z = extent[4:6]
-        if axis == 'x':
-            return tuple(y + z)
-        if axis == 'y':
-            return tuple(x + z)
-        if axis == 'z':
-            return tuple(x + y)
-
-    def get_image_transform(self):
-        return T.Affine2D().rotate_deg_around(*self.get_image_center(),
-                                              self.get_rotation())
-
-    def get_rotated_extent(self):
-        '''
-        Calculate the new extents of the tile after rotation.
-
-        This assumes that the tile is rotated using scipy.ndimage where the
-        resulting array is reshaped to ensure that the input image is contained
-        entirely in the output image.
-        '''
-        e = self.extent[:]
-        ll = e[0], e[2]
-        lr = e[1], e[2]
-        ul = e[0], e[3]
-        ur = e[1], e[3]
-        coords = np.array([ll, lr, ur, ul, ll])
-        t_coords = self.get_image_transform().transform(coords)
-        xlb, ylb = t_coords.min(axis=0)
-        xub, yub = t_coords.max(axis=0)
-        e[:4] = xlb, xub, ylb, yub
-        return e
-
-    def get_image_center(self, axis='z', norm=False):
-        extent = self.get_image_extent()
-        center = np.array(extent).reshape((2, 2)).mean(axis=1)
-        return tuple(center)
-
-    def get_rotation(self):
-        return self.info.get('rotation', 0)
-
-    def get_image(self, channels=None, z_slice=None, axis='z',
-                  norm_percentile=99):
-        if z_slice is None:
-            data = self.image.max(axis='xyz'.index(axis))
-        else:
-            data = self.image[:, :, z_slice, :]
-        x, y = data.shape[:2]
-
-        # Normalize data
-        data_max =  np.percentile(data, norm_percentile, axis=(0, 1), keepdims=True)
-        data_mask = data_max != 0
-        data = np.divide(data, data_max, where=data_mask).clip(0, 1)
-
-        if channels is None:
-            channels = self.channel_names
-        elif isinstance(channels, int):
-            raise ValueError('Must provide name for channel')
-        elif isinstance(channels, str):
-            channels = [channels]
-        elif len(channels) == 0:
-            #raise ValueError('Cannot generate image with zero channels')
-            return np.zeros((x, y))
-
-        # Check that channels are valid and generate config
-        channel_config = {}
-        for c in channels:
-            if isinstance(c, ChannelConfig):
-                if not c.visible:
-                    continue
-                if c.name not in self.channel_names:
-                    raise ValueError(f'Channel {c.name} does not exist')
-                channel_config[c.name] = {
-                    'min_value': c.min_value,
-                    'max_value': c.max_value,
-                    **CHANNEL_CONFIG[c.name],
-                }
-            elif isinstance(c, dict):
-                channel_config[c['name']] = {
-                    **c,
-                    **CHANNEL_CONFIG[c['name']],
-                }
-            elif c not in self.channel_names:
-                raise ValueError(f'Channel {c} does not exist')
-            else:
-                channel_config[c] = {
-                    'min_value': 0,
-                    'max_value': 1,
-                    **CHANNEL_CONFIG[c],
-                }
-
-        image = []
-        for c, c_info in enumerate(self.info['channels']):
-            if c_info['name'] in channel_config:
-                config = channel_config[c_info['name']]
-                rgb = colors.to_rgba(config['display_color'])[:3]
-
-                lb = config['min_value']
-                ub = config['max_value']
-                d = np.clip((data[..., c] - lb) / (ub - lb), 0, 1)
-                d = d[..., np.newaxis] * rgb
-                image.append(d)
-
-        return np.concatenate([i[np.newaxis] for i in image]).max(axis=0)
-
-    def get_state(self):
-        return {"extent": self.extent}
-
-    def set_state(self, state):
-        self.extent = state["extent"]
-
-    def map(self, x, y, channel, smooth_radius=2.5, width=5):
-        """
-        Calculate intensity in the specified channel for the xy coordinates.
-
-        Optionally apply image smoothing and/or a maximum search.
-        """
-        # get_image returns a Nx3 array where the final dimension is RGB color.
-        # We are only requesting one channel, but it is possible that the
-        # information in the channel will be split among multiple RGB colors
-        # depending on the specific color it is coded as. The sum should never
-        # exceed 255.
-        image = self.get_image(channel).sum(axis=-1)
-        if smooth_radius:
-            template = self.nuclei_template(smooth_radius)
-            template = template.mean(axis=-1)
-            image = signal.convolve2d(image, template, mode="same")
-
-        if width:
-            x, y = util.expand_path(x, y, width)
-
-        xi, yi = self.to_indices(x.ravel(), y.ravel())
-        i = ndimage.map_coordinates(image, [xi, yi])
-
-        i.shape = x.shape
-        if width is not None:
-            i = i.max(axis=0)
-        return i
-
-    def center(self, dx, dy):
-        '''
-        Center tile origin with respect to dx and dy
-
-        This is used for attempting to register images using phase cross-correlation
-        '''
-        extent = np.array(self.extent)
-        width, height = extent[1:4:2] - extent[:4:2]
-        self.extent = [dx, dx + width, dy, dy + height] + extent[4:]
-
-
-class CellAnalysis:
-
-    def __init__(self):
-        self.spirals = {c: Points() for c in CELLS}
-        self.cells = {c: Points() for c in CELLS}
+        # We assume that each tile has the same set of channels
+        return self.tiles[0].channel_names
 
     def guess_cells(self, cell_type, width, spacing, channel, z_slice):
         tile = self.merge_tiles()
@@ -505,38 +288,19 @@ class CellAnalysis:
 
 class Piece(CellAnalysis):
 
+    piece = Value()
+    copied_from = Str()
+    region = Value()
+
     def __init__(self, tiles, piece, copied_from=None, region=None):
-        super().__init__()
-        self.tiles = tiles
+        super().__init__(tiles=tiles)
         self.piece = piece
         self.copied_from = copied_from
         self.region = region
 
-    def __iter__(self):
-        yield from self.tiles
-
     @property
     def is_copy(self):
         return bool(self.copied_from)
-
-    @property
-    def channel_names(self):
-        # We assume that each tile has the same set of channels
-        return self.tiles[0].channel_names
-
-    def get_image_extent(self):
-        return self._get_extent(lambda t: t.get_image_extent())
-
-    def get_rotated_extent(self):
-        return self._get_extent(lambda t: t.get_rotated_extent())
-
-    def _get_extent(self, cb):
-        extents = np.vstack([cb(tile) for tile in self.tiles])
-        xmin = extents[:, 0].min()
-        xmax = extents[:, 1].max()
-        ymin = extents[:, 2].min()
-        ymax = extents[:, 3].max()
-        return [xmin, xmax, ymin, ymax]
 
     def merge_tiles(self, flatten=True):
         '''
@@ -732,24 +496,11 @@ class Cochlea:
 
 class TileAnalysis(CellAnalysis):
 
+    name = Str()
+
     def __init__(self, tile, name):
-        super().__init__()
-        self.tile = tile
+        super().__init__(tiles=[tile])
         self.name = name
-
-    def merge_tiles(self):
-        return self.tile
-
-    def get_image_extent(self):
-        return self.tile.get_image_extent()
-
-    @property
-    def channel_names(self):
-        # We assume that each tile has the same set of channels
-        return self.tile.channel_names
-
-    def __iter__(self):
-        yield from [self.tile]
 
 
 class TileAnalysisCollection:
