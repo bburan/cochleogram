@@ -12,6 +12,8 @@ import numpy as np
 import pandas as pd
 from scipy import ndimage, optimize, signal
 
+from ndimage_enaml.util import expand_path
+
 
 def get_region(spline, start, end):
     x1, y1 = start
