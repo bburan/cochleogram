@@ -302,57 +302,6 @@ class Piece(CellAnalysis):
     def is_copy(self):
         return bool(self.copied_from)
 
-    def merge_tiles(self, flatten=True):
-        '''
-        Merges the information from the tiles into one single tile representing the piece
-
-        This is typically used when we need to do analyses that function across
-        the individual tiles.
-        '''
-        merged_lb = np.vstack([t.get_rotated_extent()[::2] for t in self.tiles]).min(axis=0)
-        merged_ub = np.vstack([t.get_rotated_extent()[1::2] for t in self.tiles]).max(axis=0)
-        voxel_size = self.tiles[0].info["voxel_size"]
-        lb_pixels = np.floor(merged_lb / voxel_size).astype("i")
-        ub_pixels = np.ceil(merged_ub / voxel_size).astype("i")
-        extent_pixels = ub_pixels - lb_pixels
-        shape = extent_pixels.tolist() + [self.tiles[0].n_channels]
-        merged_image = np.full(shape, fill_value=0, dtype=int)
-        merged_n = np.full(shape, fill_value=0, dtype=int)
-
-        for i, tile in enumerate(self.tiles):
-            if flatten:
-                img = tile.image.max(axis=2, keepdims=True)
-            else:
-                img = tile.image
-
-            if tile.get_rotation() != 0:
-                img = ndimage.rotate(img, tile.get_rotation(), cval=np.nan, order=0)
-
-            tile_lb = tile.get_rotated_extent()[::2]
-            tile_lb = np.round((tile_lb - merged_lb) / voxel_size).astype("i")
-            tile_ub = tile_lb + img.shape[:-1]
-            s = tuple([np.s_[lb:ub] for lb, ub in zip(tile_lb, tile_ub)])
-            merged_image[s] += img
-            merged_n[s] += 1
-
-        merged_image = merged_image / merged_n
-        merged_image = merged_image.astype('i')
-
-        info = {
-            "lower": merged_lb,
-            "voxel_size": voxel_size,
-            "rotation": 0,
-        }
-
-        t_base = self.tiles[0]
-        extra_keys = set(t_base.info.keys()) - set(('lower', 'voxel_size', 'rotation'))
-        for k in extra_keys:
-            for t in self.tiles[1:]:
-                if t_base.info[k] != t.info[k]:
-                    raise ValueError(f'Cannot merge tiles. {k} differs.')
-            info[k] = t_base.info[k]
-        return Tile(info, merged_image, f'piece_{self.piece}_merged')
-
     def align_tiles(self, alignment_channel='MyosinVIIa'):
         # First, figure out the order in which we should work on the alignment.
         # Let's keep it basic by just sorting by lower left corner of the xy

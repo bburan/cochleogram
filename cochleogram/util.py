@@ -53,17 +53,6 @@ def argnearest(x, y, xa, ya):
     return np.argmin(d)
 
 
-def expand_path(x, y, width):
-    v = x + y * 1j
-    a = np.angle(np.diff(v)) + np.pi / 2
-    a = np.pad(a, (1, 0), mode='edge')
-    dx = width * np.cos(a)
-    dy = width * np.sin(a)
-    x = np.linspace(x - dx, x + dx, 100)
-    y = np.linspace(y - dy, y + dy, 100)
-    return x, y
-
-
 def find_nuclei(x, y, i, spacing=5, prominence=None):
     xy_delta = np.median(np.sqrt(np.diff(x) ** 2 + np.diff(y) ** 2))
     distance = np.floor(spacing / xy_delta)
