@@ -37,7 +37,7 @@ from matplotlib import transforms as T
 import numpy as np
 from scipy import interpolate
 
-from ndimage_enaml.presenter import NDImageCollectionPresenter
+from ndimage_enaml.presenter import NDImageCollectionPresenter, StatePersistenceMixin
 
 from cochleogram.config import CELLS, CELL_COLORS, CELL_KEY_MAP, TOOL_KEY_MAP
 from cochleogram.model import ChannelConfig, Piece, Points, Tile
@@ -381,7 +381,7 @@ class ImagePlot(Atom):
         self.channel_config[channel_name].max_value = max_value
 
 
-class BasePresenter(NDImageCollectionPresenter):
+class BasePresenter(NDImageCollectionPresenter, StatePersistenceMixin):
 
     #: Label of cell being marked
     cells = Str()
@@ -420,16 +420,6 @@ class BasePresenter(NDImageCollectionPresenter):
     #: Interface to help read data
     reader = Instance(BaseReader)
 
-    #: State as saved to file (used for checking against present state to
-    #: determine if there are unsaved changes)
-    saved_state = Dict()
-
-    #: Flag indicating whether there are unsaved changes
-    unsaved_changes = Bool(False)
-
-    #: Dictionary of all tile artists
-    tile_artists = Dict()
-
     # For spirals and cells
     point_artists = Dict()
     current_spiral_artist = Value()
@@ -440,35 +430,16 @@ class BasePresenter(NDImageCollectionPresenter):
             color = CELL_COLORS[key]
             cells = PointPlot(self.axes, obj.cells[key], name=key, base_color=color)
             spiral = LinePlot(self.axes, obj.spirals[key], name=key, base_color=color)
-            cells.observe('updated', self.update)
-            spiral.observe('updated', self.update)
+            cells.observe('updated', self.request_redraw)
+            spiral.observe('updated', self.request_redraw)
+            cells.observe('updated', self.update_state)
+            spiral.observe('updated', self.update_state)
             self.point_artists[key, 'cells'] = cells
             self.point_artists[key, 'spiral'] = spiral
 
         # This sets up the image plots
         super().__init__(obj=obj, reader=reader, **kwargs)
         self.load_state()
-
-    def _default_saved_state(self):
-        return self.get_full_state()
-
-    def save_state(self):
-        state = self.get_full_state()
-        self.reader.save_state(self.obj, state)
-        self.saved_state = state
-        self.update()
-
-    def load_state(self):
-        try:
-            state = self.reader.load_state(self.obj)
-            self.obj.set_state(state['data'])
-            self.saved_state = state
-            self.update()
-        except IOError:
-            pass
-
-    def check_for_changes(self):
-        raise NotImplementedError
 
     @observe('cells', 'tool')
     def _update_plots(self, event=None):
@@ -545,7 +516,7 @@ class BasePresenter(NDImageCollectionPresenter):
         return False
 
     def get_state(self):
-        artist_states = {k: a.get_state() for k, a in self.tile_artists.items()}
+        artist_states = {k: a.get_state() for k, a in self.ndimage_artists.items()}
         point_artist_states = {':'.join(k): a.get_state() for k, a in self.point_artists.items()}
         return {
             "cells": self.cells,
@@ -556,7 +527,7 @@ class BasePresenter(NDImageCollectionPresenter):
 
     def set_state(self, state):
         for k, s in state["artists"].items():
-            self.tile_artists[k].set_state(s)
+            self.ndimage_artists[k].set_state(s)
         for k, s in state["point_artists"].items():
             self.point_artists[tuple(k.split(':'))].set_state(s)
         self.set_interaction_mode(state["cells"], state["tool"])
@@ -566,14 +537,6 @@ class BasePresenter(NDImageCollectionPresenter):
             "data": self.obj.get_state(),
             "view": self.get_state(),
         })
-
-    def _observe_saved_state(self, event):
-        self.check_for_changes()
-
-    def check_for_changes(self):
-        saved = self.saved_state['data'].copy()
-        unsaved = self.get_full_state()['data']
-        self.unsaved_changes = saved != unsaved
 
 
 class CellCountPresenter(BasePresenter):
@@ -600,7 +563,7 @@ class CellCountPresenter(BasePresenter):
             return
         if event.key in ["up", "down"]:
             self.scroll_zaxis(event.key)
-        self.update()
+        self.request_redraw()
 
 
 class CochleogramPresenter(BasePresenter):
@@ -613,9 +576,6 @@ class CochleogramPresenter(BasePresenter):
     rotate_ndimage = set_default(True)
 
     available_tools = set_default(("tile", "spiral", "exclude", "cells"))
-
-    def _observe_saved_state(self, event):
-        self.check_for_changes()
 
     def check_for_changes(self):
         saved = self.saved_state['data'].copy()
@@ -631,20 +591,20 @@ class CochleogramPresenter(BasePresenter):
     @observe("highlight_selected")
     def update_highlight(self, event=None):
         alpha = self.alpha_unselected if self.highlight_selected else 1
-        for artist in self.tile_artists.values():
+        for artist in self.ndimage_artists.values():
             artist.zorder = self.zorder_unselected
             artist.alpha = alpha
             artist.highlight = False
         if self.current_artist is not None:
             if self.highlight_selected:
                 self.current_artist.alpha = self.alpha_selected
-                self.current_artist.rectangle.set_alpha(1)
                 self.current_artist.highlight = True
             self.current_artist.zorder = self.zorder_selected
-        self.update()
+        self.request_redraw()
 
     def action_auto_align_tiles(self):
         self.obj.align_tiles(self.current_artist.visible_channels)
+        self.update_state()
 
     def action_clone_spiral(self, to_spiral, distance):
         xn, yn = self.obj.spirals[self.cells].expand_nodes(distance)
@@ -690,10 +650,11 @@ class CochleogramPresenter(BasePresenter):
                 self.current_artist.move_image(event.key.split('+')[1], 0.25)
         elif event.key.lower() == "n":
             i = self.current_artist_index
-            self.current_artist_index = (i + 1) % len(self.tile_artists)
+            self.current_artist_index = (i + 1) % len(self.ndimage_artists)
         elif event.key.lower() == "p":
-            i = len(self.tile_artists) + 1
-            self.current_artist_index = (i - 1) % len(self.tile_artists)
+            i = len(self.ndimage_artists) + 1
+            self.current_artist_index = (i - 1) % len(self.ndimage_artists)
+        self.update_state()
 
     def key_press_point_plot(self, event):
         if event.key.startswith('shift+'):
@@ -710,7 +671,7 @@ class CochleogramPresenter(BasePresenter):
             lb, ub = self.axes.get_ylim()
             shift = (ub-lb) * scale * (1 if event.key == 'up' else -1)
             self.axes.set_ylim(lb + shift, ub + shift)
-        self.update()
+        self.request_redraw()
 
     def right_button_press(self, event):
         if self.tool != 'tile':
@@ -723,7 +684,7 @@ class CochleogramPresenter(BasePresenter):
 
     def button_release_tile(self, event):
         if event.button == MouseButton.LEFT and event.xdata is not None:
-            for i, artist in enumerate(self.tile_artists.values()):
+            for i, artist in enumerate(self.ndimage_artists.values()):
                 if artist.contains(event.xdata, event.ydata):
                     self.current_artist_index = i
                     break
@@ -769,3 +730,4 @@ class CochleogramPresenter(BasePresenter):
 
     def end_drag_tile(self, event):
         self.drag_event = None
+        self.update_state()
