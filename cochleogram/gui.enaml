@@ -410,7 +410,7 @@ enamldef CochleogramDockItem(DockItem): dock_item:
     Container: container:
         constraints = [
             vbox(
-                hbox(dc, display_apply, spacer, highlight_selected),
+                hbox(dc, display_apply, highlight_selected),
                 hbox(tool_label, mode_buttons, spacer, load_analysis, save_analysis),
                 hbox(action_label, action_auto_align_tiles,
                      action_clear_spiral, action_clear_cells,
@@ -440,7 +440,7 @@ enamldef CochleogramDockItem(DockItem): dock_item:
             checked = True
             clicked ::
                 if checked:
-                    presenter.set_display_mode(dc.display_mode.selected, True)
+                    presenter.set_display_mode(dc.display_mode, True)
 
         PushButton: highlight_selected:
             text = 'Highlight selected'
