@@ -285,26 +285,43 @@ def load_czi(filename, max_xy=1024, dtype='uint8'):
     z_pos = 0
     origin = np.array([x_pos, y_pos, z_pos])
 
-    rotation = float(fh.meta.find(".//SampleRotation").text)
+    try:
+        rotation = float(fh.meta.find(".//SampleRotation").text)
+    except AttributeError:
+        # SampleRotation is not in widefield image files. This seems to work,
+        # but is not tested.
+        rotation = float(fh.meta.find(".//RoiRotation").text)
 
     # Calculate the ordering of the channels so we can return them ordered from
     # lowest to highest emission wavelength. We don't actually need the name or
     # color, but I am leaving these in so that we can eventually do something
     # with them later.
     channel_config = []
-    for i, c in enumerate(fh.meta.findall('.//Channel[@IsActivated="true"]')):
-        color = c.find('Color').text
-        name = c.find('FluorescenceDye/ShortName').text
-        emission = int(c.find('AdditionalDyeInformation/DyeMaxEmission').text)
-        channel_config.append((i, name, color, emission))
+    channel_index = 0
+    for track in fh.meta.findall('.//Track[@IsActivated="true"]'):
+        for channel in track.findall('.//Channel[@IsActivated="true"]'):
+            color = channel.find('Color').text
+            # Color appears to be in ARGB format. Drop the A since Matplotlib
+            # prefers RGBA and we don't really deal with alpha values yet.
+            color = f'#{color[3:]}'
+            name = channel.find('FluorescenceDye/ShortName').text
+            emission = int(channel.find('AdditionalDyeInformation/DyeMaxEmission').text)
+            channel_config.append((channel_index, name, color, emission))
+            channel_index += 1
     channel_config.sort(key=lambda x: x[-1])
     channel_order = [c[0] for c in channel_config]
 
+    # This assumes that the names in the filename are ordered by emission value
+    # (e.g., low to high).
     channels = []
-    for c in filename.parent.stem.split('-')[2:]:
-        if c in ('63x', '20x', '10x', 'CellCount'):
-            continue
-        channels.append({'name': c})
+    exclude = ('63x', '20x', '10x', 'CellCount')
+    order = [c for c in filename.parent.stem.split('-')[2:] if c not in exclude]
+    for i, c in enumerate(order):
+        channels.append({
+            'name': c,
+            'display_color': channel_config[i][2],
+            'emission': channel_config[i][3],
+        })
 
     # Note that all units should be in microns since this is the most logical
     # unit for a confocal analysis.
@@ -326,9 +343,14 @@ def load_czi(filename, max_xy=1024, dtype='uint8'):
     c_set = []
     for c in range(dims['C']):
         z_stack = []
-        for z in range(dims['Z']):
-            i = fh.read_mosaic(Z=z, C=c).squeeze()
+        if 'Z' in dims:
+            for z in range(dims['Z']):
+                i = fh.read_mosaic(Z=z, C=c).squeeze()
+                z_stack.append(i[..., np.newaxis])
+        else:
+            i = fh.read_mosaic(C=c).squeeze()
             z_stack.append(i[..., np.newaxis])
+
         c_set.append(np.concatenate(z_stack, axis=-1)[..., np.newaxis])
     img = np.concatenate(c_set, axis=-1)
     img = img / img.max(axis=(0, 1, 2))
