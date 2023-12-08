@@ -323,9 +323,10 @@ class Piece(CellAnalysis):
             img = ndimage.rotate(tile.get_image(alignment_channel), tile.get_rotation())
             img = rgb2gray(img)
             mask = img > np.percentile(img, 95)
-            x_shift, y_shift = phase_cross_correlation(base_img, img,
-                                                       reference_mask=base_mask,
-                                                       moving_mask=mask)
+            result = phase_cross_correlation(base_img, img,
+                                             reference_mask=base_mask,
+                                             moving_mask=mask)
+            x_shift, y_shift = result[0]
             extent = np.array(base_tile.extent[:])
             extent[0:2] += x_shift * x_um_per_px
             extent[2:4] += y_shift * y_um_per_px
