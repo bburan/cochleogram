@@ -20,7 +20,7 @@ from enaml.widgets.api import (Action, ActionGroup, ButtonGroup, CheckBox,
                                Slider, VGroup, Window)
 
 
-from ndimage_enaml.gui import DisplayConfig
+from ndimage_enaml.gui import DisplayConfig, NDImageCanvas
 
 from cochleogram import plot, util
 from cochleogram.model import Cochlea
@@ -282,22 +282,6 @@ enamldef ActionGuessCells(HGroup):
                     information(self, 'Error', str(e))
 
 
-class CochleogramCanvas(MPLCanvas):
-
-    def set_focus(self, event=None):
-        self.figure.canvas.setFocus(Qt.OtherFocusReason)
-
-
-def bind_focus(items, cb):
-    observe = ['toggled', 'selected', 'value', 'clicked']
-    for item in items:
-        for o in observe:
-            if hasattr(item, o):
-                item.observe(o, cb)
-        if getattr(item, 'children', []):
-            bind_focus(item.children, cb)
-
-
 enamldef TileDockItem(DockItem): dock_item:
 
     title << '{}{}'.format(presenter.obj.name, '*' if presenter.unsaved_changes else '')
@@ -388,7 +372,7 @@ enamldef TileDockItem(DockItem): dock_item:
         ActionGuessCells: action_guess_cells:
             presenter << dock_item.presenter
 
-        CochleogramCanvas: canvas:
+        NDImageCanvas: canvas:
             figure << presenter.figure
 
 
@@ -580,9 +564,8 @@ enamldef CochleogramDockItem(DockItem): dock_item:
                             log.exception(e)
                             information(self, 'Error', str(e))
 
-        CochleogramCanvas: canvas:
+        NDImageCanvas: canvas:
             figure << presenter.figure
-            toolbar_visible = False
 
 
 enamldef ProgressWindow(Window): window:
