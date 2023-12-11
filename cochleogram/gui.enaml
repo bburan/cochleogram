@@ -19,6 +19,9 @@ from enaml.widgets.api import (Action, ActionGroup, ButtonGroup, CheckBox,
                                ObjectCombo, PopupView, ProgressBar, PushButton,
                                Slider, VGroup, Window)
 
+
+from ndimage_enaml.gui import DisplayConfig, NDImageCanvas
+
 from cochleogram import plot, util
 from cochleogram.model import Cochlea
 from cochleogram.presenter import CochleogramPresenter, CellCountPresenter
@@ -27,17 +30,8 @@ from cochleogram import readers
 
 def load_icon(name):
     data = resources.files('cochleogram.icons').joinpath(f'{name}.png').read_bytes()
-    img = Image(data=data)
-    icg = IconImage(image=img)
+    icg = IconImage(image=Image(data=data))
     return Icon(images=[icg])
-
-
-def bind(figure, presenter):
-    figure.canvas.mpl_connect('key_press_event', lambda e: presenter.key_press(e))
-    figure.canvas.mpl_connect('button_press_event', lambda e: presenter.button_press(e))
-    figure.canvas.mpl_connect('button_release_event', lambda e: presenter.button_release(e))
-    figure.canvas.mpl_connect('scroll_event', lambda e: presenter.scroll(e))
-    figure.canvas.mpl_connect('motion_notify_event', lambda e: presenter.motion(e))
 
 
 ################################################################################
@@ -288,60 +282,6 @@ enamldef ActionGuessCells(HGroup):
                     information(self, 'Error', str(e))
 
 
-class CochleogramCanvas(MPLCanvas):
-
-    def set_focus(self, event=None):
-        self.figure.canvas.setFocus(Qt.OtherFocusReason)
-
-
-def bind_focus(items, cb):
-    observe = ['toggled', 'selected', 'value', 'clicked']
-    for item in items:
-        for o in observe:
-            if hasattr(item, o):
-                item.observe(o, cb)
-        if getattr(item, 'children', []):
-            bind_focus(item.children, cb)
-
-
-enamldef ChannelConfigPopup(PopupView):
-    attr presenter
-    attr display_apply = False
-
-    anchor = (0.5, 0.0)
-    parent_anchor = (0.5, 1.0)
-    arrow_size = 20
-
-    Container:
-        layout_constraints => ():
-            widgets = self.visible_widgets()
-            cb = widgets[::2]
-            slider = widgets[1::2]
-            constraints = [vbox(*[hbox(c, s) for c, s in zip(cb, slider)])]
-            constraints.append(align('left', *slider))
-            constraints.append(align('left', *cb))
-            return constraints
-
-        Looper:
-            iterable << presenter.current_artist.channel_config.items() \
-                if presenter.current_artist is not None else {}
-
-            CheckBox:
-                text = loop_item[0]
-                checked << loop_item[1].visible
-                checked ::
-                    presenter.set_channel_visible(loop_item[0], checked, display_apply)
-            DualSlider:
-                minimum = 0
-                maximum = 100
-                low_value << int(loop_item[1].min_value * 100)
-                high_value << int(loop_item[1].max_value * 100)
-                low_value ::
-                    presenter.set_channel_min_value(loop_item[0], low_value / 100, display_apply)
-                high_value ::
-                    presenter.set_channel_max_value(loop_item[0], high_value / 100, display_apply)
-
-
 enamldef TileDockItem(DockItem): dock_item:
 
     title << '{}{}'.format(presenter.obj.name, '*' if presenter.unsaved_changes else '')
@@ -360,53 +300,22 @@ enamldef TileDockItem(DockItem): dock_item:
     Container: container:
         constraints = [
             vbox(
-                hbox(display_label, channels, display_as_label, display_mode,
-                     z_slice_number_label, z_slice, spacer),
+                dc,
                 hbox(tool_label, mode_buttons, spacer, load_analysis, save_analysis),
                 hbox(action_label, action_clear_spiral, action_clear_cells,
                      spacer, spacing=0),
                 hbox(action_guess_cells, spacer, spacing=0),
                 canvas,
             ),
-            align('v_center', display_label, channels, display_as_label,
-                  display_mode, z_slice_number_label, z_slice),
             align('v_center', tool_label, mode_buttons),
             align('v_center', action_label, action_clear_spiral, action_clear_cells),
-            align('left', tool_label, display_label, action_label),
-            align('left', channels, mode_buttons, action_clear_spiral, action_guess_cells),
+            align('left', tool_label, dc.children[0], action_label),
+            align('left', dc.children[1], mode_buttons,
+                  action_clear_spiral, action_guess_cells),
         ]
 
-        Label: display_label:
-            text = 'Display'
-
-        PushButton: channels:
-            text = 'Channels'
-            clicked ::
-                popup = ChannelConfigPopup(self, presenter=dock_item.presenter)
-                popup.show()
-
-        Label: display_as_label:
-            text = 'as'
-
-        ObjectCombo: display_mode:
-            items = ['projection', 'slice']
-            selected << presenter.current_artist.display_mode
-            selected ::
-                presenter.set_display_mode(selected)
-
-        Label: z_slice_number_label:
-            text = 'number'
-            enabled << display_mode.selected == 'slice'
-
-        Slider: z_slice:
-            enabled << display_mode.selected == 'slice'
-            tick_interval = 1
-            value << presenter.current_artist.z_slice
-            value ::
-                presenter.set_z_slice(value)
-            minimum << presenter.current_artist.z_slice_min
-            maximum << presenter.current_artist.z_slice_max
-            tool_tip = 'Use up and down arrow keys when counting cells to scroll through z-steps'
+        DisplayConfig: dc:
+            presenter << dock_item.presenter
 
         PushButton: load_analysis:
             text = 'Load'
@@ -455,19 +364,16 @@ enamldef TileDockItem(DockItem): dock_item:
             text = 'Actions'
 
         PBActionClearSpiral: action_clear_spiral:
-            presenter = dock_item.presenter
+            presenter << dock_item.presenter
 
         PBActionClearCells: action_clear_cells:
-            presenter = dock_item.presenter
+            presenter << dock_item.presenter
 
         ActionGuessCells: action_guess_cells:
-            presenter = dock_item.presenter
+            presenter << dock_item.presenter
 
-        CochleogramCanvas: canvas:
+        NDImageCanvas: canvas:
             figure << presenter.figure
-            toolbar_visible = False
-            initialized ::
-                deferred_call(bind, figure, presenter)
 
 
 enamldef CochleogramDockItem(DockItem): dock_item:
@@ -488,9 +394,7 @@ enamldef CochleogramDockItem(DockItem): dock_item:
     Container: container:
         constraints = [
             vbox(
-                hbox(display_label, channels, display_as_label, display_mode,
-                     z_slice_number_label, z_slice, display_apply, spacer,
-                     highlight_selected),
+                hbox(dc, display_apply, highlight_selected),
                 hbox(tool_label, mode_buttons, spacer, load_analysis, save_analysis),
                 hbox(action_label, action_auto_align_tiles,
                      action_clear_spiral, action_clear_cells,
@@ -500,49 +404,19 @@ enamldef CochleogramDockItem(DockItem): dock_item:
                 action_copy_exclusion,
                 canvas,
             ),
-            align('v_center', display_label, channels, display_as_label,
-                  display_mode, z_slice_number_label, z_slice, display_apply,
-                  highlight_selected),
+            align('v_center', dc.children[0], display_apply, highlight_selected),
             align('v_center', tool_label, mode_buttons),
             align('v_center', action_label, action_auto_align_tiles,
                   action_clear_spiral, action_clear_cells,
                   action_simplify_exclusions, action_merge_ohc_exclusions),
-            align('left', display_label, tool_label, action_label),
+            align('left', dc.children[0], tool_label, action_label),
             align('left', mode_buttons, action_auto_align_tiles,
                   action_guess_cells, action_copy_exclusion),
         ]
 
-        Label: display_label:
-            text = 'Display'
-
-        PushButton: channels:
-            text = 'Channels'
-            clicked ::
-                popup = ChannelConfigPopup(self, presenter=dock_item.presenter,
-                                           display_apply=display_apply.checked)
-                popup.show()
-
-        Label: display_as_label:
-            text = 'as'
-
-        ObjectCombo: display_mode:
-            items = ['projection', 'slice']
-            selected << 'projection' if presenter.current_artist is None else presenter.current_artist.display_mode
-            selected ::
-                presenter.set_display_mode(selected, display_apply.checked)
-
-        Label: z_slice_number_label:
-            text = 'number'
-            enabled << display_mode.selected == 'slice'
-
-        Slider: z_slice:
-            enabled << display_mode.selected == 'slice'
-            tick_interval = 1
-            value << 0 if presenter.current_artist is None else presenter.current_artist.z_slice
-            value ::
-                presenter.set_z_slice(value, display_apply.checked)
-            minimum << presenter.z_min if presenter.current_artist is None else presenter.current_artist.z_slice_min
-            maximum << presenter.z_max if presenter.current_artist is None else presenter.current_artist.z_slice_max
+        DisplayConfig: dc:
+            presenter << dock_item.presenter
+            padding = 0
 
         PushButton: display_apply:
             text = 'Apply to all tiles'
@@ -550,7 +424,7 @@ enamldef CochleogramDockItem(DockItem): dock_item:
             checked = True
             clicked ::
                 if checked:
-                    presenter.set_display_mode(display_mode.selected, True)
+                    presenter.set_display_mode(dc.display_mode, True)
 
         PushButton: highlight_selected:
             text = 'Highlight selected'
@@ -610,16 +484,16 @@ enamldef CochleogramDockItem(DockItem): dock_item:
                     presenter.action_auto_align_tiles()
 
         PBActionClearSpiral: action_clear_spiral:
-            presenter = dock_item.presenter
-            is_copy = dock_item.presenter.obj.is_copy
+            presenter << dock_item.presenter
+            is_copy << dock_item.presenter.obj.is_copy
 
         PBActionClearCells: action_clear_cells:
-            presenter = dock_item.presenter
-            is_copy = dock_item.presenter.obj.is_copy
+            presenter << dock_item.presenter
+            is_copy << dock_item.presenter.obj.is_copy
 
         ActionGuessCells: action_guess_cells:
-            presenter = dock_item.presenter
-            is_copy = dock_item.presenter.obj.is_copy
+            presenter << dock_item.presenter
+            is_copy << dock_item.presenter.obj.is_copy
 
         PushButton: action_simplify_exclusions:
             text = 'Simplify exclusions'
@@ -690,11 +564,8 @@ enamldef CochleogramDockItem(DockItem): dock_item:
                             log.exception(e)
                             information(self, 'Error', str(e))
 
-        CochleogramCanvas: canvas:
+        NDImageCanvas: canvas:
             figure << presenter.figure
-            toolbar_visible = False
-            initialized ::
-                deferred_call(bind, figure, presenter)
 
 
 enamldef ProgressWindow(Window): window:
@@ -885,7 +756,6 @@ enamldef CochleagramWindow(MainWindow): window:
                     except Exception as e:
                         log.exception(e)
                         critical(window, 'Plotting', str(e))
-
 
     initialized ::
         for presenter in presenters:
