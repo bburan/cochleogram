@@ -42,7 +42,7 @@ def main():
     logging.basicConfig(level='INFO')
 
     with enaml.imports():
-        from cochleogram.gui import CochleagramWindow, load_dataset
+        from cochleogram.gui import CochleogramWindow, load_dataset
 
     parser = argparse.ArgumentParser("Cochleogram helper")
     parser.add_argument("path", nargs='?')
@@ -52,7 +52,7 @@ def main():
     config = get_config()
 
     current_path = config['DEFAULT']['current_path']
-    view = CochleagramWindow(current_path=current_path)
+    view = CochleogramWindow(current_path=current_path)
     if args.path is not None:
         deferred_call(load_dataset, args.path, view)
     view.show()

@@ -638,7 +638,7 @@ def get_title(reader):
         return f'Cochleogram :: {reader.get_name()}'
 
 
-enamldef CochleagramWindow(MainWindow): window:
+enamldef CochleogramWindow(MainWindow): window:
 
     initial_size = (900, 900)
     title << get_title(reader)
