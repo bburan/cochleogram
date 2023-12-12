@@ -20,7 +20,7 @@ from enaml.widgets.api import (Action, ActionGroup, ButtonGroup, CheckBox,
                                Slider, VGroup, Window)
 
 
-from ndimage_enaml.gui import DisplayConfig, NDImageCanvas
+from ndimage_enaml.gui import bind_focus, DisplayConfig, NDImageCanvas
 
 from cochleogram import plot, util
 from cochleogram.model import Cochlea
@@ -284,14 +284,10 @@ enamldef ActionGuessCells(HGroup):
 
 enamldef TileDockItem(DockItem): dock_item:
 
-    title << '{}{}'.format(presenter.obj.name, '*' if presenter.unsaved_changes else '')
+    title << '{}{}'.format('*' if presenter.unsaved_changes else '', presenter.obj.name)
 
     attr presenter
     closable = False
-
-    initialized ::
-        bind_focus(container.children, canvas.set_focus)
-        deferred_call(canvas.set_focus)
 
     initialized ::
         bind_focus(container.children, canvas.set_focus)
@@ -378,14 +374,10 @@ enamldef TileDockItem(DockItem): dock_item:
 
 enamldef CochleogramDockItem(DockItem): dock_item:
 
-    title << 'Piece {}{}'.format(presenter.obj.piece, '*' if presenter.unsaved_changes else '')
+    title << '{}Piece {}'.format('*' if presenter.unsaved_changes else '', presenter.obj.piece)
 
     attr presenter
     closable = False
-
-    initialized ::
-        bind_focus(container.children, canvas.set_focus)
-        deferred_call(canvas.set_focus)
 
     initialized ::
         bind_focus(container.children, canvas.set_focus)
