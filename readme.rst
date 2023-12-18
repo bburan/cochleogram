@@ -202,6 +202,10 @@ right click
     Add cell
 shift + right click
     Remove cell
+ctrl + right click (only for IHCs)
+    Labels cell as supernumerary (See Rask-Andersen et al. 2017; Supernumerary
+    human hair cells - signs of regeneration or impaired development? A field
+    emission scanning electron microscopy study).
 
 From time to time there will be a fourth row of OHCs. These should manually be
 identified by selecting "extra" for the cell you would like to edit and then
