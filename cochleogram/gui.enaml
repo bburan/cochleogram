@@ -288,7 +288,6 @@ P_FREQ = re.compile(r'.*?(\d+p\d+)_kHz.*')
 def get_tile_di_title(unsaved_changes, name):
     pre = '*' if unsaved_changes else ''
     if (m := P_FREQ.match(name)) is not None:
-        print(m.group(1))
         freq = m.group(1).replace('p', '.')
         title = f'{pre}{freq} kHz - {name}'
     else:

@@ -28,6 +28,7 @@ class Points(Atom):
     y = List()
     origin = Int()
     exclude = List()
+    labels = Dict()
 
     updated = Event()
 
@@ -60,6 +61,13 @@ class Points(Atom):
         dy = distance * np.sin(a)
 
         return xn + dx, yn + dy
+
+    def get_labeled_nodes(self, label):
+        coords = [coords for coords, labels in self.labels.items() if label in labels]
+        if len(coords) == 0:
+            return [(), ()]
+        else:
+            return list(zip(*coords))
 
     def get_nodes(self):
         """
@@ -150,9 +158,22 @@ class Points(Atom):
         log.info('Removing node %d. Origin is %d.', i, self.origin)
         if self.origin > i:
             self.origin -= 1
-        self.x.pop(i)
-        self.y.pop(i)
+        coords = self.x.pop(i), self.y.pop(i)
+        if coords in self.labels:
+            labels = self.labels.pop(coords)
+            log.info('Removing label for node %d. Coords are %r. Labels were %r.', i, coords, labels)
         self.update_exclude()
+        self.updated = True
+
+    def label_node(self, x, y, label, toggle, hit_threshold=25):
+        i = self.find_node(x, y, hit_threshold)
+        coords = self.x[i], self.y[i]
+        log.info('Labeling node %d as %s. Coords are %r.', i, label, coords)
+        labels = self.labels.setdefault(coords, set())
+        if label in labels:
+            labels.remove(label)
+        else:
+            labels.add(label)
         self.updated = True
 
     def set_origin(self, x, y, hit_threshold=25):
@@ -218,17 +239,20 @@ class Points(Atom):
         self.set_nodes([], [])
 
     def get_state(self):
+        labels = list(self.labels.items())
         return {
             "x": self.x,
             "y": self.y,
             "origin": self.origin,
             "exclude": self.exclude,
+            "labels": [[list(k), list(v)] for k, v in self.labels.items()],
         }
 
     def set_state(self, state):
         x = np.array(state["x"])
         y = np.array(state["y"])
         m = np.isnan(x) | np.isnan(y)
+        self.labels = {tuple(k): set(v) for k, v in state.get("labels", [])}
         self.x = x[~m].tolist()
         self.y = y[~m].tolist()
         self.exclude = state.get("exclude", [])

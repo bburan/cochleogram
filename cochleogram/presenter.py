@@ -50,11 +50,8 @@ class PointPlot(Atom):
     #: Artist that plots the nodes the user specified
     artist = Value()
 
-    #: Artist that draws the spline connecting the nodes the user selected. The
-    #: spline is automatically updated as the user adds/removes nodes. The
-    #: spline is used for many calculations so it is important to ensure it
-    #: passes through the desired points.
-    spline_artist = Value()
+    #: Artist that highlights certain points
+    highlight_artist = Value()
 
     axes = Value()
     points = Typed(Points)
@@ -68,19 +65,36 @@ class PointPlot(Atom):
     base_color = Value('black')
     artist_styles = Dict()
 
+    #: List of patheffects for "active" and "inactive" that are used to style
+    #: the artist.
+    highlight_artist_styles = Dict()
+
+    highlight_label = Str()
+
     def _default_artist_styles(self):
         return {
             'active': [
                 pe.PathPatchEffect(facecolor=self.base_color, edgecolor='white', linewidth=1),
             ],
             'inactive': [
-                pe.PathPatchEffect(facecolor=self.base_color, edgecolor='none', alpha=0.75),
+                pe.PathPatchEffect(facecolor=self.base_color, edgecolor='white', alpha=0.75),
+            ],
+        }
+
+    def _default_highlight_artist_styles(self):
+        return {
+            'active': [
+                pe.PathPatchEffect(facecolor='black', edgecolor='white', linewidth=2),
+            ],
+            'inactive': [
+                pe.PathPatchEffect(facecolor='black', edgecolor='white', linewidth=2, alpha=0.75),
             ],
         }
 
     def __init__(self, axes, points, **kwargs):
         super().__init__(axes=axes, points=points, **kwargs)
         self.artist, = self.axes.plot([], [], "o", zorder=100, color='none')
+        self.highlight_artist, = axes.plot([], [], "o", color='none', zorder=90, ms=10)
         self.points.observe('updated', self.request_redraw)
 
     def get_state(self):
@@ -98,6 +112,9 @@ class PointPlot(Atom):
     def remove_point(self, x, y):
         self.points.remove_node(x, y)
 
+    def label_point(self, x, y, label, toggle=True):
+        self.points.label_node(x, y, label, toggle=toggle)
+
     @observe("active")
     def request_redraw(self, event=False):
         self.needs_redraw = True
@@ -112,16 +129,26 @@ class PointPlot(Atom):
         nodes = self.points.get_nodes()
         self.has_nodes = len(nodes[0]) > 0
         self.artist.set_data(*nodes)
+
+        highlight_nodes = self.points.get_labeled_nodes(self.highlight_label)
+        self.highlight_artist.set_data(*highlight_nodes)
+
         style = 'active' if self.active else 'inactive'
         self.artist.set_path_effects(self.artist_styles[style])
+        self.highlight_artist.set_path_effects(self.highlight_artist_styles[style])
         self.updated = True
 
 
 class LinePlot(PointPlot):
 
-    spline_artist = Value()
     exclude_artist = Value()
     new_exclude_artist = Value()
+
+    #: Artist that draws the spline connecting the nodes the user selected. The
+    #: spline is automatically updated as the user adds/removes nodes. The
+    #: spline is used for many calculations so it is important to ensure it
+    #: passes through the desired points.
+    spline_artist = Value()
 
     #: Artist that plots the starting point (i.e., the first node). This is a
     #: visual clue that lets the user know that the arc is proceeding in the
@@ -437,6 +464,10 @@ class BasePresenter(NDImageCollectionPresenter, StatePersistenceMixin):
             self.point_artists[key, 'cells'] = cells
             self.point_artists[key, 'spiral'] = spiral
 
+        # Indicate that all cells marked as supernumerary should be
+        # highlighted.
+        self.point_artists['IHC', 'cells'].highlight_label = 'supernumerary'
+
         # This sets up the image plots
         super().__init__(obj=obj, reader=reader, **kwargs)
         self.load_state()
@@ -487,6 +518,8 @@ class BasePresenter(NDImageCollectionPresenter, StatePersistenceMixin):
         if event.key == 'control' and event.xdata is not None:
             if self.tool == 'spiral':
                 self.point_artists[self.cells, 'spiral'].set_origin(event.xdata, event.ydata)
+            elif self.tool == 'cells' and self.cells == 'IHC':
+                self.point_artists[self.cells, 'cells'].label_point(event.xdata, event.ydata, 'supernumerary')
         elif event.key == "shift" and event.xdata is not None:
             if self.tool == 'cells':
                 self.point_artists[self.cells, 'cells'].remove_point(event.xdata, event.ydata)
