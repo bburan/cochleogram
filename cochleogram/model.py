@@ -102,13 +102,24 @@ class Points(Atom):
         return xi, yi
 
     def length(self, degree=3, smoothing=0, resolution=0.001):
-        nodes = self.get_nodes()
-        if len(nodes[0]) <= 3:
+        '''
+        Calculate length of spiral that passes through the nodes.
+        '''
+        if len(self.exclude) != 0:
+            raise NotImplementedError('Length calculations not available with excluded regions yet')
+        x, y = self.interpolate(degree, smoothing, resolution)
+        if len(x) == 0:
             return np.nan
-        tck, u = interpolate.splprep(nodes, k=degree, s=smoothing)
-        x = np.arange(0, 1 + resolution, resolution)
-        xi, yi = interpolate.splev(x, tck, der=1)
-        return xi, yi
+        d = np.sqrt(np.diff(x) ** 2 + np.diff(y) ** 2).cumsum()
+        return d.max()
+
+    def n(self):
+        '''
+        Number of nodes.
+        '''
+        if len(self.exclude):
+            raise NotImplementedError('Node count available with excluded regions yet')
+        return len(self.x)
 
     def set_nodes(self, *args):
         if len(args) == 1:
