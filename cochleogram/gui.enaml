@@ -115,7 +115,7 @@ def open_folder_for_HC_counts(window, reader, pathtype):
         load_tile_dataset(path, window, reader)
 
 
-def open_lif_folder_for_HC_counts(window):
+def open_lif_file_for_HC_counts(window):
     return open_folder_for_HC_counts(window, readers.LIFTileReader, 'file')
 
 
@@ -128,6 +128,8 @@ def load_tile_dataset(path, window, reader_class=None):
     if reader_class is None:
         if path.suffix.lower() == '.lif':
             reader_class = readers.LIFTileReader
+        elif path.is_dir():
+            reader_class = readers.CZITileReader
         else:
             raise ValueError(f'Unrecognized format for {path}')
 
@@ -690,7 +692,7 @@ enamldef CochleogramWindow(MainWindow): window:
                     text = 'LIF file'
                     triggered ::
                         try:
-                            open_lif_folder_for_HC_counts(window)
+                            open_lif_file_for_HC_counts(window)
                         except Exception as e:
                             log.exception(e)
                             critical(window, 'Load', str(e))
