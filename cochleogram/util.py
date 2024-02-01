@@ -316,6 +316,8 @@ def load_czi(filename, max_xy=1024, dtype='uint8'):
     channels = []
     exclude = ('63x', '20x', '10x', 'CellCount')
     order = [c for c in filename.parent.stem.split('-')[2:] if c not in exclude]
+    if len(order) != len(channel_order):
+        raise ValueError('Mismatch between channels in filename and file')
     for i, c in enumerate(order):
         channels.append({
             'name': c,
