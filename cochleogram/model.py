@@ -432,9 +432,7 @@ class Cochlea:
                 return False
         return True
 
-    def make_frequency_map(self, freq_start=4, freq_end=64, freq_step=0.5,
-                           species='mouse', spiral='IHC',
-                           include_extremes=True):
+    def calculate_distance(self, species='mouse', spiral='IHC'):
         # First, we need to merge the spirals
         xo, yo = 0, 0
         results = []
@@ -465,7 +463,15 @@ class Cochlea:
         results['distance_mm'] = results['distance_mm'].fillna(0)
         results['distance_norm'] = results['distance_mm'] / results['distance_mm'].max()
         results['frequency'] = freq_fn[species](results['distance_norm'])
+        return results
 
+    def make_frequency_map(self, freq_start=4, freq_end=64, freq_step=0.5,
+                           species='mouse', spiral='IHC',
+                           include_extremes=True):
+        '''
+        Return information for generating frequency map
+        '''
+        results = self.calculate_distance(species=species, spiral=spiral)
         info = {}
         for freq in octave_space(freq_start, freq_end, freq_step):
             idx = (results['frequency'] - freq).abs().idxmin()
