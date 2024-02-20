@@ -258,6 +258,42 @@ def process_lif(filename, reprocess, cb=None):
         cb(progress)
 
 
+def czi_get_channel_config_confocal(fh):
+    # This is the old approach to loading the channel config
+    channel_config = []
+    channel_index = 0
+    for track in fh.meta.findall('.//Track[@IsActivated="true"]'):
+        for channel in track.findall('.//Channel[@IsActivated="true"]'):
+            color = channel.find('Color').text
+            # Color appears to be in ARGB format. Drop the A since Matplotlib
+            # prefers RGBA and we don't really deal with alpha values yet.
+            color = f'#{color[3:]}'
+            name = channel.find('FluorescenceDye/ShortName').text
+            emission = int(channel.find('AdditionalDyeInformation/DyeMaxEmission').text)
+            channel_config.append((channel_index, name, color, emission))
+            channel_index += 1
+    channel_config.sort(key=lambda x: x[-1])
+    return channel_config
+
+
+def czi_get_channel_config_dims(fh):
+    # Probably more accurate?
+    channel_config = []
+    channel_index = 0
+    for channel in fh.meta.findall('.//Dimensions/Channels/Channel'):
+        color = channel.find('Color').text
+        # Color appears to be in ARGB format. Drop the A since Matplotlib
+        # prefers RGBA and we don't really deal with alpha values yet.
+        color = f'#{color[3:]}'
+        name = channel.find('Fluor').text.replace('Alexa Fluor ', 'AF')
+
+        emission = int(channel.find('EmissionWavelength').text)
+        channel_config.append((channel_index, name, color, emission))
+        channel_index += 1
+    channel_config.sort(key=lambda x: x[-1])
+    return channel_config
+
+
 def load_czi(filename, max_xy=1024, dtype='uint8'):
     filename = Path(filename)
 
@@ -290,34 +326,27 @@ def load_czi(filename, max_xy=1024, dtype='uint8'):
     except AttributeError:
         # SampleRotation is not in widefield image files. This seems to work,
         # but is not tested.
-        rotation = float(fh.meta.find(".//RoiRotation").text)
+        try:
+            rotation = float(fh.meta.find(".//RoiRotation").text)
+        except AttributeError:
+            rotation = 0
 
     # Calculate the ordering of the channels so we can return them ordered from
     # lowest to highest emission wavelength. We don't actually need the name or
     # color, but I am leaving these in so that we can eventually do something
     # with them later.
-    channel_config = []
-    channel_index = 0
-    for track in fh.meta.findall('.//Track[@IsActivated="true"]'):
-        for channel in track.findall('.//Channel[@IsActivated="true"]'):
-            color = channel.find('Color').text
-            # Color appears to be in ARGB format. Drop the A since Matplotlib
-            # prefers RGBA and we don't really deal with alpha values yet.
-            color = f'#{color[3:]}'
-            name = channel.find('FluorescenceDye/ShortName').text
-            emission = int(channel.find('AdditionalDyeInformation/DyeMaxEmission').text)
-            channel_config.append((channel_index, name, color, emission))
-            channel_index += 1
-    channel_config.sort(key=lambda x: x[-1])
+    channel_config = czi_get_channel_config_dims(fh)
     channel_order = [c[0] for c in channel_config]
 
     # This assumes that the names in the filename are ordered by emission value
     # (e.g., low to high).
     channels = []
-    exclude = ('63x', '20x', '10x', 'CellCount')
+    exclude = ('63x', '20x', '10x', 'CellCount', 'WF')
     order = [c for c in filename.parent.stem.split('-')[2:] if c not in exclude]
     if len(order) != len(channel_order):
-        raise ValueError('Mismatch between channels in filename and file')
+        file_name = ', '.join(order)
+        file_info = ', '.join(c[1] for c in channel_config)
+        raise ValueError(f'Mismatch between channels in filename and file ({file_name} != {file_info})')
     for i, c in enumerate(order):
         channels.append({
             'name': c,
