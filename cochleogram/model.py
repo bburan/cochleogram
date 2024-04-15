@@ -380,8 +380,9 @@ class Piece(CellAnalysis):
 
     def set_state(self, state):
         super().set_state(state)
-        for tile in self.tiles:
-            tile.set_state(state['tiles'][tile.source])
+        if 'tiles' in state:
+            for tile in self.tiles:
+                tile.set_state(state['tiles'][tile.source])
 
 
 freq_fn = {
