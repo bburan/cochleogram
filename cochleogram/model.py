@@ -16,7 +16,7 @@ from skimage.color import rgb2gray
 
 from raster_geometry import sphere
 
-from ndimage_enaml.model import ChannelConfig, NDImage, NDImageCollection
+from ndimage_enaml.model import NDImage, NDImageCollection
 
 from cochleogram import util
 from cochleogram.config import CELLS, CHANNEL_CONFIG
@@ -274,6 +274,9 @@ class Points(Atom):
 class Tile(NDImage):
 
     source = Str()
+
+    def _default_channel_defaults(self):
+        return CHANNEL_CONFIG
 
     def __init__(self, info, image, source):
         super().__init__(info, image)

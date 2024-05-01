@@ -37,10 +37,11 @@ from matplotlib import transforms as T
 import numpy as np
 from scipy import interpolate
 
+from ndimage_enaml.model import ChannelConfig
 from ndimage_enaml.presenter import NDImageCollectionPresenter, StatePersistenceMixin
 
 from cochleogram.config import CELLS, CELL_COLORS, CELL_KEY_MAP, TOOL_KEY_MAP
-from cochleogram.model import ChannelConfig, Piece, Points, Tile
+from cochleogram.model import Piece, Points, Tile
 from cochleogram.readers import BaseReader
 from cochleogram.util import get_region, make_plot_path, shortest_path
 
@@ -335,6 +336,7 @@ class ImagePlot(Atom):
         self.z_slice = self.tile.image.shape[2] // 2
         self.shift = self.tile.info["voxel_size"][0] * 5
         self.channel_config = {c: ChannelConfig(name=c) for c in tile.channel_names}
+
         for config in self.channel_config.values():
             config.observe('visible', self.request_redraw)
             config.observe('min_value', self.request_redraw)

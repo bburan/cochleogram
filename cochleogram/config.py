@@ -2,18 +2,19 @@ CELLS = ('IHC', 'OHC1', 'OHC2', 'OHC3', 'Extra')
 
 
 CHANNEL_CONFIG = {
-    'CtBP2': { 'display_color': 'red'},
-    'MyosinVIIa': {'display_color': 'blue'},
-    'GluR2': {'display_color': 'green'},
-    'GlueR2': {'display_color': 'green'},
-    'PMT': {'display_color': 'white'},
-    'DAPI': {'display_color': 'white'},
+    'CtBP2': { 'display_color': '#FF0000'},
+    'MyosinVIIa': {'display_color': '#0000FF'},
+    'GluR2': {'display_color': '#00FF00'},
+    'GlueR2': {'display_color': '#00FF00'},
+    'PMT': {'display_color': '#FFFFFF'},
+    'DAPI': {'display_color': '#FFFFFF', 'visible': False},
 
     # Channels are tagged as unknown if there's difficulty parsing the channel
     # information from the file.
-    'Unknown 1': {'display_color': 'red'},
-    'Unknown 2': {'display_color': 'green'},
-    'Unknown 3': {'display_color': 'blue'},
+    'Unknown 1': {'display_color': '#FF0000'},
+    'Unknown 2': {'display_color': '#00FF00'},
+    'Unknown 3': {'display_color': '#0000FF'},
+    'Unknown 4': {'display_color': '#FFFFFF'},
 }
 
 
