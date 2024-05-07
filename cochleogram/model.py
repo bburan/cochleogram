@@ -492,10 +492,12 @@ class Cochlea:
 class TileAnalysis(CellAnalysis):
 
     name = Str()
+    frequency = Value()
 
-    def __init__(self, tile, name):
+    def __init__(self, tile, name, frequency=None):
         super().__init__(tiles=[tile])
         self.name = name
+        self.frequency = frequency
 
 
 class TileAnalysisCollection:

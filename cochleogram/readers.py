@@ -11,6 +11,14 @@ import numpy as np
 from . import model
 from . import util
 
+P_FREQ = re.compile(r'.*?(\d+p\d+)_kHz.*')
+
+
+def extract_frequency(name):
+    if (m := P_FREQ.match(name)) is not None:
+        return float(m.group(1).replace('p', '.'))
+    return None
+
 
 class BaseReader:
     '''
@@ -242,7 +250,8 @@ class LIFTileReader(TileReader):
     def load_tile(self, tile_name):
         info, img = util.load_lif(self.path, tile_name)
         tile = model.Tile(info, img, source=tile_name)
-        return model.TileAnalysis(tile, name=tile_name)
+        freq = extract_frequency(tile_name)
+        return model.TileAnalysis(tile, name=tile_name, frequency=freq)
 
     def list_tiles(self):
         tile_names = {}
@@ -252,7 +261,7 @@ class LIFTileReader(TileReader):
                 tile_names[img.name] = tile_name
             except Exception as e:
                 pass
-        return tile_names
+        return sorted(tile_names, key=extract_frequency)
 
     def save_path(self):
         return self.path.parent / self.path.stem
@@ -264,13 +273,14 @@ class CZITileReader(TileReader):
         filename = self.path / f'{tile_name}.czi'
         info, img = util.load_czi(filename)
         tile = model.Tile(info, img, source=tile_name)
-        return model.TileAnalysis(tile, name=tile_name)
+        freq = extract_frequency(tile_name)
+        return model.TileAnalysis(tile, name=tile_name, frequency=freq)
 
     def list_tiles(self):
         tile_names = {}
         for img in self.path.glob('*.czi'):
             tile_names[img.stem] = img.stem
-        return tile_names
+        return sorted(tile_names, key=extract_frequency)
 
     def save_path(self):
         return self.path

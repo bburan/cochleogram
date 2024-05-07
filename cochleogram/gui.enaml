@@ -286,21 +286,16 @@ enamldef ActionGuessCells(HGroup):
                     information(self, 'Error', str(e))
 
 
-P_FREQ = re.compile(r'.*?(\d+p\d+)_kHz.*')
-
-def get_tile_di_title(unsaved_changes, name):
+def get_tile_di_title(unsaved_changes, obj):
     pre = '*' if unsaved_changes else ''
-    if (m := P_FREQ.match(name)) is not None:
-        freq = m.group(1).replace('p', '.')
-        title = f'{pre}{freq} kHz - {name}'
-    else:
-        title = f'{pre}{name}'
-    return title
+    if obj.frequency is not None:
+        return f'{pre}{obj.frequency} kHz - {obj.name}'
+    return f'{pre}{obj.name}'
 
 
 enamldef TileDockItem(DockItem): dock_item:
 
-    title << get_tile_di_title(presenter.unsaved_changes, presenter.obj.name)
+    title << get_tile_di_title(presenter.unsaved_changes, presenter.obj)
 
     attr presenter
     closable = False
