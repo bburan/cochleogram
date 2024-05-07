@@ -4,6 +4,7 @@ log = logging.getLogger(__name__)
 from importlib import resources
 from pathlib import Path
 import re
+import urllib.request
 
 from enaml.application import deferred_call
 from enaml.core.api import Conditional, Looper
@@ -777,8 +778,22 @@ enamldef CochleogramWindow(MainWindow): window:
     Container:
         DockArea: workspace:
             name = 'dock_area'
-
+            features = Feature.DropEnabled
             layout = TabLayout('help')
+
+            drag_enter => (event):
+                if event.mime_data().has_format('text/uri-list'):
+                    event.accept_proposed_action()
+
+            drop => (event):
+                text = event.mime_data().data('text/uri-list').decode('utf-8')
+                filenames = []
+                for t in text.strip().split('\n'):
+                    t = urllib.parse.unquote(t).strip()
+                    fragments = urllib.parse.urlsplit(t)
+                    path = Path(urllib.request.url2pathname(fragments.path))
+                    filenames.append(path)
+                load_dataset(filenames[0], window)
 
             DockItem:
                 name = 'help'
