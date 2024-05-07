@@ -14,7 +14,7 @@ dependencies = [
     "atom",
     "enaml[qt6-pyside]",
     "matplotlib",
-	"ndimage-enaml >= 0.0.7",
+	"ndimage-enaml >= 0.0.8",
     "numpy",
     "raster_geometry",
     "pandas",
