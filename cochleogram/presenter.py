@@ -418,11 +418,35 @@ class BasePresenter(NDImageCollectionPresenter, StatePersistenceMixin):
     #: List of available cells
     available_cells = Tuple()
 
+    #: Width along line to search for cells
+    guess_width = Float(2.5)
+
+    #: Minimum spacing of cells identified
+    guess_spacing = Float(5.0)
+
+    #: Channel to use for searching for cells
+    guess_channel = Str()
+
     def _default_available_cells(self):
         return CELLS
 
     def _default_cells(self):
         return self.available_cells[0]
+
+    def _default_guess_channel(self):
+        return self._guess_channel()
+
+    def _guess_channel(self):
+        if self.cells == 'IHC' and 'CtBP2' in self.obj.channel_names:
+            return 'CtBP2'
+        elif 'MyosinVIIa' in self.obj.channel_names:
+            return 'MyosinVIIa'
+        else:
+            return self.obj.channel_names[0]
+
+    def _observe_cells(self, event):
+        # Select reasonable default for guessing cells.
+        self.guess_channel = self._guess_channel()
 
     #: Active tool
     tool = Str()
@@ -492,9 +516,9 @@ class BasePresenter(NDImageCollectionPresenter, StatePersistenceMixin):
             else:
                 self.current_cells_artist.active = True
 
-    def action_guess_cells(self, width, spacing, channel):
+    def action_guess_cells(self):
         z_slice = self.current_artist.z_slice if self.current_artist.display_mode == 'slice' else None
-        n = self.obj.guess_cells(self.cells, width, spacing, channel, z_slice)
+        n = self.obj.guess_cells(self.cells, self.guess_width, self.guess_spacing, self.guess_channel, z_slice)
         self.set_interaction_mode(None, 'cells')
         return n
 
@@ -548,6 +572,11 @@ class BasePresenter(NDImageCollectionPresenter, StatePersistenceMixin):
         if (c := CELL_KEY_MAP.get(key, None)) is not None:
             deferred_call(self.set_interaction_mode, c, None)
             return True
+        if key == 'ctrl+s':
+            self.save_state()
+            return True
+        if key == 'ctrl+c':
+            self.action_guess_cells()
         return False
 
     def get_state(self):

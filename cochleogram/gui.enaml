@@ -234,14 +234,6 @@ enamldef PBActionClearCells(PushButton):
                 information(self, 'Error', str(e))
 
 
-def guess_cells_channel(cells, channel_names):
-    if cells == 'IHC' and 'CtBP2' in channel_names:
-        return 'CtBP2'
-    if 'MyosinVIIa' in channel_names:
-        return 'MyosinVIIa'
-    return channel_names[0]
-
-
 enamldef ActionGuessCells(HGroup):
     attr presenter
     attr is_copy = False
@@ -260,26 +252,24 @@ enamldef ActionGuessCells(HGroup):
     Label:
         text = 'Find cells within'
     FloatField: guess_width:
-        value = 2.5
+        value := presenter.guess_width
     Label:
         text = 'μm of spline with a spacing of'
     FloatField: guess_spacing:
-        value = 5.0
+        value := presenter.guess_spacing
     Label:
         text = 'μm using'
     ObjectCombo: guess_channel:
         items = presenter.obj.channel_names
-        selected << guess_cells_channel(presenter.cells, presenter.obj.channel_names)
+        selected := presenter.guess_channel
 
     PushButton:
-        text = 'update'
+        text = 'Count'
         clicked ::
             button = question(self, 'Confirm action', f'Are you sure you want to overwrite the existing cells?')
             if button is not None and button.text == 'Yes':
                 try:
-                    n = presenter.action_guess_cells(guess_width.value,
-                                                     guess_spacing.value,
-                                                     guess_channel.selected)
+                    n = presenter.action_guess_cells()
                     information(self, 'Info', f'Found {n} cells')
                 except Exception as e:
                     log.exception(e)
@@ -308,17 +298,13 @@ enamldef TileDockItem(DockItem): dock_item:
         constraints = [
             vbox(
                 dc,
-                hbox(tool_label, mode_buttons, spacer, load_analysis, save_analysis),
-                hbox(action_label, action_clear_spiral, action_clear_cells,
-                     spacer, spacing=0),
-                hbox(action_guess_cells, spacer, spacing=0),
+                hbox(tool_label, mode_buttons, action_clear_spiral, action_clear_cells, spacer, spacing=0),
+                hbox(action_guess_cells, spacer, load_analysis, save_analysis, spacing=0),
                 canvas,
             ),
-            align('v_center', tool_label, mode_buttons),
-            align('v_center', action_label, action_clear_spiral, action_clear_cells),
-            align('left', tool_label, dc.children[0], action_label),
-            align('left', dc.children[1], mode_buttons,
-                  action_clear_spiral, action_guess_cells),
+            align('v_center', tool_label, mode_buttons, action_clear_spiral, action_clear_cells),
+            align('left', tool_label, dc.children[0]),
+            align('left', dc.children[1], mode_buttons),
         ]
 
         DisplayConfig: dc:
@@ -365,10 +351,7 @@ enamldef TileDockItem(DockItem): dock_item:
                     toggled ::
                         if self.checked:
                             presenter.tool = loop_item
-                    tool_tip = "Press s to select spiral tool, c to select cell tool"
-
-        Label: action_label:
-            text = 'Actions'
+                    tool_tip = "Press shift+s to select spiral tool, shift+c to select cell tool"
 
         PBActionClearSpiral: action_clear_spiral:
             presenter << dock_item.presenter
@@ -729,11 +712,11 @@ enamldef CochleogramWindow(MainWindow): window:
                 separator = True
 
             Action:
-                text = 'Save analysis\tCtrl+S'
+                text = 'Save analysis'
                 triggered ::
                     save_state(window, window.presenters)
             Action:
-                text = 'Load analysis\tCtrl+L'
+                text = 'Load analysis'
                 triggered ::
                     load_state(window, window.presenters)
 
