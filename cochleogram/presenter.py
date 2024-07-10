@@ -65,6 +65,7 @@ class PointPlot(Atom):
 
     base_color = Value('black')
     artist_styles = Dict()
+    marker_style = Value('o')
 
     #: List of patheffects for "active" and "inactive" that are used to style
     #: the artist.
@@ -94,8 +95,8 @@ class PointPlot(Atom):
 
     def __init__(self, axes, points, **kwargs):
         super().__init__(axes=axes, points=points, **kwargs)
-        self.artist, = self.axes.plot([], [], "o", zorder=100, color='none')
-        self.highlight_artist, = axes.plot([], [], "o", color='none', zorder=90, ms=10)
+        self.artist, = self.axes.plot([], [], self.marker_style, zorder=100, color='none')
+        self.highlight_artist, = axes.plot([], [], self.marker_style, color='none', zorder=90, ms=10)
         self.points.observe('updated', self.request_redraw)
 
     def get_state(self):
@@ -482,7 +483,7 @@ class BasePresenter(NDImageCollectionPresenter, StatePersistenceMixin):
         for key in self.available_cells:
             color = CELL_COLORS[key]
             cells = PointPlot(self.axes, obj.cells[key], name=key, base_color=color)
-            spiral = LinePlot(self.axes, obj.spirals[key], name=key, base_color=color)
+            spiral = LinePlot(self.axes, obj.spirals[key], name=key, base_color=color, marker_style='s')
             cells.observe('updated', self.request_redraw)
             spiral.observe('updated', self.request_redraw)
             cells.observe('updated', self.update_state)
