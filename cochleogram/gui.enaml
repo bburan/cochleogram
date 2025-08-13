@@ -581,13 +581,39 @@ enamldef CompositeWindow(Window):
     attr channels = cochlea.channel_names
 
     Container:
-        CheckBox: include_freq_map:
-            text = 'Include frequency map?'
+        HGroup: freq_map:
+            padding = 0
+            align_widths = False
             visible << cochlea.ihc_spiral_complete()
-            checked << visible
+            Label:
+                text = 'Frequency map'
+            ObjectCombo: freq_map_species:
+                items = [None, 'mouse', 'gerbil']
+                enabled << cochlea.ihc_spiral_complete()
+            HGroup:
+                padding = 0
+                align_widths = False
+                constraints = [
+                    freq_start.width == 35,
+                    freq_end.width == 35,
+                    freq_step.width == 35,
+                ]
+                FloatField: freq_start:
+                    value = 4.0
+                Label:
+                    text = 'to'
+                FloatField: freq_end:
+                    value = 64.0
+                Label:
+                    text = 'kHz in'
+                FloatField: freq_step:
+                    value = 0.5
+                Label:
+                    text = 'octave steps'
+
         Label:
-            text = 'Cannot include frequency map because IHC spiral incomplete.'
-            visible << not include_freq_map.visible
+            text = 'Cannot include frequency map because the IHC spiral is incomplete.'
+            visible << not freq_map.visible
         Label:
             text = 'Channels to include'
         Looper:
@@ -606,10 +632,22 @@ enamldef CompositeWindow(Window):
             enabled << len(channels) != 0
             clicked ::
                 try:
-                    fig = plot.plot_composite(cochlea,
-                                              include_freq_map=include_freq_map.checked,
+                    if freq_map_species.selected is not None:
+                        freq_map = {
+                            'species': freq_map_species.selected,
+                            'freq_start': freq_start.value,
+                            'freq_end': freq_end.value,
+                            'freq_step': freq_step.value,
+                        }
+                    else:
+                        freq_map = None
+
+                    fig = plot.plot_composite(cochlea, freq_map=freq_map,
                                               channels=channels)
-                    fig.suptitle(reader.get_name())
+                    title = reader.get_name()
+                    if freq_map_species.selected is not None:
+                        title = f'{title}\n{freq_map_species.selected} map'
+                    fig.suptitle(title)
                     reader.save_figure(fig, 'frequency_map')
                     information(self, 'Plotting', 'Composite has been generated.')
                 except Exception as e:

@@ -388,8 +388,13 @@ class Piece(CellAnalysis):
                 tile.set_state(state['tiles'][tile.source])
 
 
+# Recieves normalized distance along the cochlear partition from the base as a
+# fraction.  Returns frequency in kHz. Some equations may be modified to accept
+# distance as a normalized fraction (0 to 1) if tthe report reports distance in
+# percent.
 freq_fn = {
     'mouse': lambda d: (10**((1-d)*0.92) - 0.680) * 9.8,
+    'gerbil': lambda d: (10**((1-d)*2.2) - 0.631) * 0.398, # Muller 1996
 }
 
 

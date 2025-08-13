@@ -69,11 +69,11 @@ def plot_piece(ax, piece):
     _plot_piece(ax, piece, 0, 0, 0, 0)
 
 
-def plot_composite(cochlea, include_freq_map=True, cells=None, channels=None,
+def plot_composite(cochlea, freq_map=None, cells=None, channels=None,
                    label_pieces=True):
     figure, ax = plt.subplots(1, 1, figsize=(11, 8.5))
-    if include_freq_map:
-        freq_map = cochlea.make_frequency_map()
+    if freq_map is not None:
+        freq_map = cochlea.make_frequency_map(**freq_map)
     else:
         freq_map = None
 
