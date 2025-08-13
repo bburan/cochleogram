@@ -15,9 +15,8 @@ dependencies = [
     "enaml[qt6-pyside]",
 	"pyside6 < 6.7.0", # bug in 6.7.0
     "matplotlib",
-	"ndimage-enaml >= 0.0.8",
+	"ndimage-enaml >= 0.0.10",
     "numpy",
-    "raster_geometry",
     "pandas",
     "scipy",
     "scikit-image",

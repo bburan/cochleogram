@@ -14,8 +14,6 @@ from scipy import signal
 from skimage.registration import phase_cross_correlation
 from skimage.color import rgb2gray
 
-from raster_geometry import sphere
-
 from ndimage_enaml.model import NDImage, NDImageCollection
 
 from cochleogram import util
