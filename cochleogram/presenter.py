@@ -241,7 +241,7 @@ class LinePlot(PointPlot):
 
         if self.has_nodes:
             nodes = self.points.get_nodes()
-            self.origin_artist.set_data(nodes[0][0], nodes[1][0])
+            self.origin_artist.set_data([nodes[0][0]], [nodes[1][0]])
         else:
             self.origin_artist.set_data([], [])
 
