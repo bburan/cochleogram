@@ -143,7 +143,7 @@ class LIFCochleaReader(CochleaReader):
         self.fh = LifFile(path)
 
     def list_pieces(self):
-        p_piece = re.compile('^(?!_)piece_(\d+)\w?')
+        p_piece = re.compile(r'^(?!_)piece_(\d+)\w?')
         pieces = {}
         for img in self.fh.get_iter_image():
             try:
@@ -172,7 +172,7 @@ class CZICochleaReader(CochleaReader):
     should be saved to the same folder and contain the piece numbers.
     '''
     def list_pieces(self):
-        p_piece = re.compile('^(?!_).*piece_(\d+)\w?')
+        p_piece = re.compile(r'^(?!_).*piece_(\d+)\w?')
         pieces = {}
         for filename in self.path.glob('*piece_*.czi'):
             try:
@@ -195,7 +195,7 @@ class CZICochleaReader(CochleaReader):
 class ProcessedCochleaReader(CochleaReader):
 
     def list_pieces(self):
-        p_piece = re.compile('.*piece_(\d+)\w?')
+        p_piece = re.compile(r'.*piece_(\d+)\w?')
         pieces = {}
         for path in self.path.glob('*piece_*.*'):
             if path.name.endswith('.json'):
