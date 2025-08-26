@@ -41,7 +41,7 @@ label for each channel in the order the channels were imaged. For example:
 
     B009-8L-GluR2-CtBP2-MyosinVIIa
 
-Inside teh folder, each Z-stack should be numbered sequentially from base
+Inside the folder, each Z-stack should be numbered sequentially from base
 (hook) to apex. If more than one image is required for a piece (e.g., because
 you are not using tile mode), use letters for the suffixes (i.e., "piece_2a",
 "piece_2b", etc.). The order in which the images for a single piece are labeled
