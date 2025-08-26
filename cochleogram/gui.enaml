@@ -626,6 +626,10 @@ enamldef CompositeWindow(Window):
                         channels.append(loop_item)
                     else:
                         channels.remove(loop_item)
+        Label:
+            text = 'File type'
+        ObjectCombo: file_format:
+            items = ['pdf', 'tiff', 'jpg']
 
         PushButton:
             text = 'Generate'
@@ -648,7 +652,8 @@ enamldef CompositeWindow(Window):
                     if freq_map_species.selected is not None:
                         title = f'{title}\n{freq_map_species.selected} map'
                     fig.suptitle(title)
-                    reader.save_figure(fig, 'frequency_map')
+                    reader.save_figure(fig, 'frequency_map',
+                                       file_format=file_format.selected)
                     information(self, 'Plotting', 'Composite has been generated.')
                 except Exception as e:
                     log.exception(e)

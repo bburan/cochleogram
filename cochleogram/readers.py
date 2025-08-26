@@ -72,8 +72,8 @@ class CochleaReader(BaseReader):
     def __init__(self, path):
         self.path = Path(path)
 
-    def save_figure(self, fig, suffix):
-        filename = self.save_path() / f'{self.get_name()}_{suffix}.pdf'
+    def save_figure(self, fig, suffix, file_format='pdf'):
+        filename = self.save_path() / f'{self.get_name()}_{suffix}.{file_format}'
         filename.parent.mkdir(exist_ok=True)
         fig.savefig(filename)
 
