@@ -342,7 +342,8 @@ def load_czi(filename, max_xy=1024, dtype='uint8'):
     # (e.g., low to high).
     channels = []
     exclude = ('63x', '20x', '10x', 'CellCount', 'WF')
-    order = [c for c in filename.parent.stem.split('-')[2:] if c not in exclude]
+    order = [c for c in filename.stem.split('_')[0].split('-')[2:] if c not in exclude]
+    #order = [c for c in filename.stem.split('-')[2:] if c not in exclude]
     if len(order) != len(channel_order):
         file_name = ', '.join(order)
         file_info = ', '.join(c[1] for c in channel_config)
@@ -399,7 +400,7 @@ def load_czi(filename, max_xy=1024, dtype='uint8'):
 
 
 def list_pieces(path):
-    p_piece = re.compile('.*piece_(\d+)\w?')
+    p_piece = re.compile(r'.*piece_(\d+)\w?')
     pieces = []
     for path in Path(path).glob('*piece_*.*'):
         if path.name.endswith('.json'):
