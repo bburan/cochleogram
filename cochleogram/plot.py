@@ -4,8 +4,9 @@ from matplotlib import transforms
 import numpy as np
 
 
-def _plot_piece(ax, piece, xo, yo, xmax, ymax, freq_map=None, cells=None,
-                channels=None, label_piece=False, label_position='bottom'):
+def _plot_piece(ax, piece, xo, yo, xmax, ymax, freq_map=None, freq_spiral=None,
+                cells=None, channels=None, label_piece=False,
+                label_position='bottom'):
     tile = piece.merge_tiles()
     img = tile.get_image(channels=channels)
     extent = tile.get_image_extent()
@@ -17,6 +18,23 @@ def _plot_piece(ax, piece, xo, yo, xmax, ymax, freq_map=None, cells=None,
     t = tile.get_image_transform() + ax.transData
     ax.imshow(img.swapaxes(0, 1), origin='lower', extent=extent, transform=t)
 
+    if freq_spiral is not None:
+        subset = freq_spiral.query('piece == @piece.piece')
+        x = subset['x_orig']
+        y = subset['y_orig']
+        l, = ax.plot(x-xr, y-yr, 'k-', lw=1)
+        l.set_path_effects([
+            path_effects.Stroke(linewidth=2, foreground='white'),
+            path_effects.Normal(),
+        ])
+        ax.plot(x.iloc[0]-xr, y.iloc[0]-yr, 'yo', ms=4)
+        t = ax.annotate('HF', (x.iloc[0]-xr, y.iloc[0]-yr), (-15, -15),
+                        color='yellow', textcoords='offset points')
+        t.set_path_effects([
+            path_effects.Stroke(linewidth=3, foreground='black'),
+            path_effects.Normal(),
+        ])
+
     if freq_map is not None:
         for freq, freq_df in freq_map.items():
             if freq_df['piece'] != piece.piece:
@@ -25,7 +43,8 @@ def _plot_piece(ax, piece, xo, yo, xmax, ymax, freq_map=None, cells=None,
             y = freq_df['y_orig']
             f = f'{freq:.1f}'
             ax.plot(x-xr, y-yr, 'ko', mec='w', mew=2)
-            t = ax.annotate(f, (x-xr, y-yr), (5, 5), color='white', textcoords='offset points')
+            t = ax.annotate(f, (x-xr, y-yr), (5, 5), color='white',
+                            textcoords='offset points')
             t.set_path_effects([
                 path_effects.Stroke(linewidth=3, foreground='black'),
                 path_effects.Normal(),
@@ -70,25 +89,28 @@ def plot_piece(ax, piece):
 
 
 def plot_composite(cochlea, freq_map=None, cells=None, channels=None,
-                   label_pieces=True):
+                   label_pieces=True, freq_spiral=False, species=None):
     figure, ax = plt.subplots(1, 1, figsize=(11, 8.5))
-    if freq_map is not None:
-        freq_map = cochlea.make_frequency_map(**freq_map)
+
+    if freq_map is not None and species is not None:
+        freq_map = cochlea.make_frequency_map(species=species, **freq_map)
+    if freq_spiral and species is not None:
+        freq_spiral = cochlea.calculate_distance(species=species)
     else:
-        freq_map = None
+        freq_spiral = None
 
     xo, yo = 0, 0
     xmax, ymax = 0, 0
     for piece in cochlea.pieces[:3]:
         xo, yo, xmax, ymax = _plot_piece(ax, piece, xo, yo, xmax, ymax,
-                                         freq_map, cells, channels,
-                                         label_piece=label_pieces,
+                                         freq_map, freq_spiral, cells,
+                                         channels, label_piece=label_pieces,
                                          label_position='bottom')
     xo, yo = 0, ymax
     for piece in cochlea.pieces[3:]:
         xo, yo, xmax, ymax = _plot_piece(ax, piece, xo, yo, xmax, ymax,
-                                         freq_map, cells, channels,
-                                         label_piece=label_pieces,
+                                         freq_map, freq_spiral, cells,
+                                         channels, label_piece=label_pieces,
                                          label_position='top')
     ax.set_facecolor('k')
     ax.axis([0, xmax, 0, ymax])

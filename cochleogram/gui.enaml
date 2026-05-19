@@ -610,6 +610,10 @@ enamldef CompositeWindow(Window):
                     value = 0.5
                 Label:
                     text = 'octave steps'
+            CheckBox: freq_map_spiral:
+                text = 'Include full spiral?'
+                enabled << cochlea.ihc_spiral_complete()
+                checked = True
 
         Label:
             text = 'Cannot include frequency map because the IHC spiral is incomplete.'
@@ -638,19 +642,22 @@ enamldef CompositeWindow(Window):
                 try:
                     if freq_map_species.selected is not None:
                         freq_map = {
-                            'species': freq_map_species.selected,
                             'freq_start': freq_start.value,
                             'freq_end': freq_end.value,
                             'freq_step': freq_step.value,
                         }
+                        freq_spiral = True
                     else:
                         freq_map = None
+                        freq_spiral = True
 
                     fig = plot.plot_composite(cochlea, freq_map=freq_map,
-                                              channels=channels)
+                                              freq_spiral=freq_spiral,
+                                              channels=channels,
+                                              species=freq_map_species.selected)
                     title = reader.get_name()
                     if freq_map_species.selected is not None:
-                        title = f'{title}\n{freq_map_species.selected} map'
+                        title = title + '\n' + freq_map_species.selected + ' map'
                     fig.suptitle(title)
                     reader.save_figure(fig, 'frequency_map',
                                        file_format=file_format.selected)
