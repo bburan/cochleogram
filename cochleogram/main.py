@@ -1,3 +1,6 @@
+import os
+os.environ['QT_API'] = 'pyside6'
+
 import argparse
 import configparser
 import logging
