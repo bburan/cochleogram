@@ -192,6 +192,37 @@ class CZICochleaReader(CochleaReader):
         return self.path.parent / self.path.stem
 
 
+class IMSCochleaReader(CochleaReader):
+    '''
+    Reads an entire cochlea from a folder containing multiple IMS files (one
+    image per file).
+
+    This expects multiple images with at least one image per piece, possibly
+    more if the entire piece did not fit inside the field of view (i.e.,
+    tiled). All images should be saved to the same folder and contain the piece
+    numbers.
+    '''
+    def list_pieces(self):
+        p_piece = re.compile(r'^(?!_).*piece_(\d+)\w?')
+        pieces = {}
+        for filename in self.path.glob('*piece_*.ims'):
+            try:
+                piece = int(p_piece.match(filename.stem).group(1))
+                pieces.setdefault(piece, []).append(filename.stem)
+            except Exception as e:
+                pass
+        return {p: pieces[p] for p in sorted(pieces)}
+
+    def _load_tile(self, stack_name):
+        filename = self.path / f'{stack_name}.ims'
+        info, img = util.load_ims(filename)
+        name = f'{self.path.stem}_{stack_name}'
+        return model.Tile(info, img, name)
+
+    def save_path(self):
+        return self.path.parent / self.path.stem
+
+
 class ProcessedCochleaReader(CochleaReader):
 
     def list_pieces(self):

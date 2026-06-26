@@ -30,7 +30,6 @@ dev = ["docutils"]
 
 [project.scripts]
 cochleogram = "cochleogram.main:main"
-cochleogram-prepare-lif = "cochleogram.main:main_prepare_lif"
 
 [build-system]
 requires = ["setuptools>=61.2", "wheel", "setuptools_scm[toml]>=3.4.3"]

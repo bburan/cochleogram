@@ -228,34 +228,119 @@ def load_lif(filename, piece, max_xy=4096, dtype='uint8'):
     return info, img
 
 
-def process_lif(filename, reprocess, cb=None):
-    filename = Path(filename)
-    pieces = list_lif_stacks(filename)
-    n_pieces = len(pieces)
-    if cb is None:
-        cb = lambda x: x
-    for p, piece in enumerate(pieces):
-        # Check if already cached
-        cache_filename = (
-            filename.parent
-            / filename.stem
-            / (filename.stem + f'_{piece}')
-        )
-        info_filename = cache_filename.with_suffix('.json')
-        img_filename = cache_filename.with_suffix('.npy')
-        if not reprocess and info_filename.exists() and img_filename.exists():
-            info = json.loads(info_filename.read_text())
-            img = np.load(img_filename)
+def channels_from_filename(filename, expected):
+    # This assumes that the names in the filename are ordered by emission value
+    # (e.g., low to high).
+    channels = []
+    exclude = ('63x', '20x', '10x', 'CellCount', 'WF')
+    order = [c for c in filename.stem.split('_')[0].split('-')[2:] if c not in exclude]
+    if len(order) != expected:
+        file_name = ', '.join(order)
+        file_info = ', '.join(c[1] for c in channel_config)
+        raise ValueError(f'Mismatch between channels in filename and file ({file_name} != {file_info})')
+    for i, c in enumerate(order):
+        channels.append({
+            'name': c,
+            'display_color': channel_config[i][2],
+            'emission': channel_config[i][3],
+        })
+    return channels
+
+
+def ims_extract_str(attrs, key):
+    return str(''.join(attrs[key].astype('U')))
+
+
+def ims_extract_value(attrs, key):
+    return float(''.join(attrs[key].astype('U')))
+
+
+def float_rgb_to_hex(r, g, b):
+    """Converts 0.0-1.0 RGB values to an HTML hex code."""
+    # Multiply by 255, round to nearest whole number, and convert to integer
+    r_int = int(round(r * 255))
+    g_int = int(round(g * 255))
+    b_int = int(round(b * 255))
+    # Format as a hex string with leading zeros if necessary
+    # {:02x} means: format as minimum 2 characters, lowercase hex
+    return f"#{r_int:02x}{g_int:02x}{b_int:02x}".upper()
+
+
+def ims_get_channel_config(fh):
+    channel_config = []
+    channel_index = 0
+    for name, obj in fh['DataSetInfo'].items():
+        if not name.startswith('Channel'):
             continue
+        color = ims_extract_str(obj.attrs, 'Color')
+        color = tuple(float(c) for c in color.split(' '))
+        color = float_rgb_to_hex(*color)
+        emission = ims_extract_str(obj.attrs, 'LSMEmissionWavelength')
+        emission = int(emission.split(' ')[0])
+        channel_config.append((channel_index, name, color, emission))
+        channel_index += 1
+    channel_config.sort(key=lambda x: x[-1])
+    return channel_config
 
-        # Generate and cache
-        info, img = load_lif(filename, piece)
-        cache_filename.parent.mkdir(exist_ok=True, parents=True)
-        info_filename.write_text(json.dumps(info, indent=2))
-        np.save(img_filename, img, allow_pickle=False)
 
-        progress = int((p + 1) / n_pieces * 100)
-        cb(progress)
+def ims_image_info(fh):
+    image_attrs = fh['DataSetInfo/Image'].attrs
+    xlb = ims_extract_value(image_attrs, 'ExtMin0')
+    ylb = ims_extract_value(image_attrs, 'ExtMin1')
+    zlb = ims_extract_value(image_attrs, 'ExtMin2')
+    xub = ims_extract_value(image_attrs, 'ExtMax0')
+    yub = ims_extract_value(image_attrs, 'ExtMax1')
+    zub = ims_extract_value(image_attrs, 'ExtMax2')
+    xvoxels = ims_extract_value(image_attrs, 'X')
+    yvoxels = ims_extract_value(image_attrs, 'Y')
+    zvoxels = ims_extract_value(image_attrs, 'Z')
+    return {
+        'lower': [xlb, ylb, zlb],
+        'n_voxels': [
+            int(xvoxels),
+            int(yvoxels),
+            int(zvoxels),
+        ],
+        'voxel_size': [
+            np.abs(xub-xlb) / xvoxels,
+            np.abs(yub-ylb) / yvoxels,
+            np.abs(zub-zlb) / zvoxels,
+        ],
+        'channel_config': ims_get_channel_config(fh),
+    }
+
+
+def ims_image(fh, image_info):
+    data = []
+    for channel_node in fh['DataSet/ResolutionLevel 0/TimePoint 0'].values():
+        data.append(channel_node['Data'][:][..., np.newaxis])
+    data = np.concatenate(data, axis=-1)
+
+    # Figure out sort order of channels to go from lowest to highest
+    # emission wavelength.
+    emission = []
+    for i in range(data.shape[-1]):
+        c_attrs = fh[f'DataSetInfo/Channel {i}'].attrs
+        e = ims_extract_str(c_attrs, 'LSMEmissionWavelength')
+        if '-' in e:
+            e = float(e.split('-')[0])
+        elif 'nm' in e:
+            e = float(e.split(' ')[0])
+        else:
+            e = float(e)
+        emission.append(e)
+    i = np.argsort(emission)
+    x, y, z = image_info['n_voxels']
+    return data[:z, :y, :x, i].swapaxes(0, 2)
+
+
+def load_ims(filename):
+    import h5py
+    fh = h5py.File(filename, 'r')
+    info = ims_image_info(fh)
+    img = ims_image(fh, info)
+    info['channels'] = channels_from_filename(filename, info['channel_config'])
+    return info, img
 
 
 def czi_get_channel_config_confocal(fh):
@@ -286,12 +371,30 @@ def czi_get_channel_config_dims(fh):
         # prefers RGBA and we don't really deal with alpha values yet.
         color = f'#{color[3:]}'
         name = channel.find('Fluor').text.replace('Alexa Fluor ', 'AF')
-
         emission = int(channel.find('EmissionWavelength').text)
         channel_config.append((channel_index, name, color, emission))
         channel_index += 1
     channel_config.sort(key=lambda x: x[-1])
     return channel_config
+
+
+def channels_from_filename(filename, channel_config):
+    # This assumes that the names in the filename are ordered by emission value
+    # (e.g., low to high).
+    channels = []
+    exclude = ('63x', '20x', '10x', 'CellCount', 'WF')
+    order = [c for c in filename.stem.split('_')[0].split('-')[2:] if c not in exclude]
+    if len(order) != len(channel_config):
+        file_name = ', '.join(order)
+        file_info = ', '.join(c[1] for c in channel_config)
+        raise ValueError(f'Mismatch between channels in filename and file ({file_name} != {file_info})')
+    for i, c in enumerate(order):
+        channels.append({
+            'name': c,
+            'display_color': channel_config[i][2],
+            'emission': channel_config[i][3],
+        })
+    return channels
 
 
 def load_czi(filename, max_xy=1024, dtype='uint8'):
@@ -337,23 +440,7 @@ def load_czi(filename, max_xy=1024, dtype='uint8'):
     # with them later.
     channel_config = czi_get_channel_config_dims(fh)
     channel_order = [c[0] for c in channel_config]
-
-    # This assumes that the names in the filename are ordered by emission value
-    # (e.g., low to high).
-    channels = []
-    exclude = ('63x', '20x', '10x', 'CellCount', 'WF')
-    order = [c for c in filename.stem.split('_')[0].split('-')[2:] if c not in exclude]
-    #order = [c for c in filename.stem.split('-')[2:] if c not in exclude]
-    if len(order) != len(channel_order):
-        file_name = ', '.join(order)
-        file_info = ', '.join(c[1] for c in channel_config)
-        raise ValueError(f'Mismatch between channels in filename and file ({file_name} != {file_info})')
-    for i, c in enumerate(order):
-        channels.append({
-            'name': c,
-            'display_color': channel_config[i][2],
-            'emission': channel_config[i][3],
-        })
+    channels = channels_from_filename(filename, channel_config)
 
     # Note that all units should be in microns since this is the most logical
     # unit for a confocal analysis.
@@ -473,45 +560,6 @@ def arc_direction(x, y):
     if np.any(sign != sign[0]):
         raise ValueError('Cannot determine direction of arc')
     return sign[0]
-
-
-def _find_ims_converter():
-    path = Path(r'C:\Program Files\Bitplane')
-    return str(next(path.glob('**/ImarisConvert.exe')))
-
-
-def lif_to_ims(filename, reprocess=False, cb=None):
-    filename = Path(filename)
-    converter = _find_ims_converter()
-    if cb is None:
-        cb = lambda x: x
-    stacks = [(i, s) for i, s in enumerate(list_lif_stacks(filename)) if s.startswith('IHC')]
-    n_stacks = len(stacks)
-    for j, (ii, stack_name) in enumerate(stacks):
-        outfile = filename.parent / filename.stem / f'{filename.stem}_{stack_name}.ims'
-        outfile.parent.mkdir(exist_ok=True, parents=True)
-        args = [converter, '-i', str(filename), '-ii', str(ii), '-o', str(outfile)]
-        subprocess.check_output(args)
-        progress = int((j + 1) / n_stacks * 100)
-        cb(progress)
-
-
-def czi_to_ims(path, reprocess=False, cb=None):
-    path = Path(path)
-    converter = _find_ims_converter()
-    if cb is None:
-        cb = lambda x: x
-    filenames = list(path.glob('*IHC*.czi'))
-    print(filenames)
-    n_files = len(filenames)
-    for j, filename in enumerate(filenames):
-        outfile = filename.parent / f'{filename.stem}.ims'
-        outfile.parent.mkdir(exist_ok=True, parents=True)
-        args = [converter, '-i', str(filename), '-o', str(outfile)]
-        print(args)
-        subprocess.check_output(args)
-        progress = int((j + 1) / n_files * 100)
-        cb(progress)
 
 
 def guess_cells(tile, spiral, width, spacing, channel, z_slice):

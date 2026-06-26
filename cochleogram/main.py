@@ -29,16 +29,6 @@ def write_config(config):
         config.write(fh)
 
 
-def main_prepare_lif():
-    from cochleogram.util import process_lif
-    parser = argparse.ArgumentParser('Create cached files for cochleogram from LIF files')
-    parser.add_argument('path')
-    parser.add_argument('--reprocess', action='store_true')
-    args = parser.parse_args()
-    filename = Path(args.path)
-    process_lif(filename, args.reprocess)
-
-
 def main():
     import enaml
     from enaml.qt.qt_application import QtApplication

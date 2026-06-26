@@ -25,6 +25,7 @@ from enaml.widgets.api import (Action, ActionGroup, ButtonGroup, CheckBox,
 from ndimage_enaml.gui import bind_focus, DisplayConfig, NDImageCanvas
 
 from cochleogram import plot, util
+from cochleogram.config import SPECIES_SETTINGS
 from cochleogram.model import Cochlea
 from cochleogram.presenter import CochleogramPresenter, CellCountPresenter
 from cochleogram import readers
@@ -72,7 +73,10 @@ def load_cochlea_dataset(path, window, reader_class=None):
     path = Path(path)
     if reader_class is None:
         if path.is_dir():
-            reader_class = readers.CZICochleaReader
+            if len(list(path.glob('*.czi'))) > 0:
+                reader_class = readers.CZICochleaReader
+            elif len(list(path.glob('*.ims'))) > 0:
+                reader_class = readers.IMSCochleaReader
         elif path.suffix.lower() == '.lif':
             reader_class = readers.LIFCochleaReader
         else:
@@ -599,11 +603,11 @@ enamldef CompositeWindow(Window):
                     freq_step.width == 35,
                 ]
                 FloatField: freq_start:
-                    value = 4.0
+                    value << SPECIES_SETTINGS[freq_map_species.selected]['freq_lb']
                 Label:
                     text = 'to'
                 FloatField: freq_end:
-                    value = 64.0
+                    value << SPECIES_SETTINGS[freq_map_species.selected]['freq_ub']
                 Label:
                     text = 'kHz in'
                 FloatField: freq_step:
@@ -733,30 +737,6 @@ enamldef CochleogramWindow(MainWindow): window:
                         except Exception as e:
                             log.exception(e)
                             critical(window, 'Load', str(e))
-
-            Action:
-                separator = True
-
-            Menu:
-                title = 'Convert to Imaris'
-                Action:
-                    text = 'LIF file'
-                    triggered ::
-                        path = FileDialogEx.get_open_file_name(window, current_path=str(window.current_path))
-                        if path:
-                            pp = ProgressWindow()
-                            pp.show()
-                            cb = lambda x, pp=pp: setattr(pp, 'progress', x)
-                            deferred_call(util.lif_to_ims, path, reprocess=True, cb=cb)
-                Action:
-                    text = 'CZI folder'
-                    triggered ::
-                        path = FileDialogEx.get_existing_directory(window, current_path=str(window.current_path))
-                        if path:
-                            pp = ProgressWindow()
-                            pp.show()
-                            cb = lambda x, pp=pp: setattr(pp, 'progress', x)
-                            deferred_call(util.czi_to_ims, path, reprocess=True, cb=cb)
 
             Action:
                 separator = True
