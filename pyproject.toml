@@ -27,6 +27,7 @@ dynamic = ["version"]
 czi = ["aicspylibczi"]
 lif = ["readlif"]
 dev = ["docutils"]
+ims = ["h5py"]
 
 [project.scripts]
 cochleogram = "cochleogram.main:main"
