@@ -12,9 +12,9 @@ maintainers = [
 ]
 dependencies = [
     "atom",
-    "enaml",
+    "enaml >= 0.0.19",
     "matplotlib",
-	"ndimage-enaml >= 0.0.12",
+	"ndimage-enaml >= 0.0.13",
     "numpy",
     "pandas",
     "scipy",
