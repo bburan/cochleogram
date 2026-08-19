@@ -294,8 +294,11 @@ class LIFTileReader(TileReader):
                 pass
         return sorted(tile_names, key=extract_frequency)
 
+    def state_filename(self, obj):
+        return self.save_path() / f'{self.path.stem}_{obj.name}_analysis.json'
+
     def save_path(self):
-        return self.path.parent / self.path.stem
+        return self.path.parent
 
 
 class CZITileReader(TileReader):
