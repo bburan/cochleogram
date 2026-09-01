@@ -531,6 +531,17 @@ class BasePresenter(NDImageCollectionPresenter, StatePersistenceMixin):
         self.obj.clear_spiral(self.cells)
         self.set_interaction_mode(None, 'spiral')
 
+    def action_set_unratable(self, reason):
+        # Reassign the dict (rather than mutating in place) so that atom
+        # observers, and the enaml binding on the dropdown, are notified.
+        unratable = dict(self.obj.unratable)
+        if reason:
+            unratable[self.cells] = reason
+        else:
+            unratable.pop(self.cells, None)
+        self.obj.unratable = unratable
+        self.update_state()
+
     def set_interaction_mode(self, cells=None, tool=None):
         if cells is not None:
             self.cells = cells

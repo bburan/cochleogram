@@ -1,5 +1,12 @@
 CELLS = ('IHC', 'OHC1', 'OHC2', 'OHC3', 'Extra')
 
+#: Cell rows that can be scored (and therefore marked as unratable). Excludes
+#: 'Extra', which is a scratch collection rather than a real row.
+RATEABLE_CELLS = ('IHC', 'OHC1', 'OHC2', 'OHC3')
+
+#: Reasons a cell row may be marked as unratable.
+UNRATABLE_REASONS = ('tissue missing', 'poor histology')
+
 
 CHANNEL_CONFIG = {
     'CtBP2': { 'display_color': '#FF0000'},

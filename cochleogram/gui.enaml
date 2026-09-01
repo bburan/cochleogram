@@ -25,7 +25,7 @@ from enaml.widgets.api import (Action, ActionGroup, ButtonGroup, CheckBox,
 from ndimage_enaml.gui import bind_focus, DisplayConfig, NDImageCanvas
 
 from cochleogram import plot, util
-from cochleogram.config import SPECIES_SETTINGS
+from cochleogram.config import RATEABLE_CELLS, SPECIES_SETTINGS, UNRATABLE_REASONS
 from cochleogram.model import Cochlea
 from cochleogram.presenter import CochleogramPresenter, CellCountPresenter
 from cochleogram import readers
@@ -280,6 +280,23 @@ enamldef ActionGuessCells(HGroup):
                     information(self, 'Error', str(e))
 
 
+enamldef UnratableSelector(HGroup): grp:
+    attr presenter
+    padding = 0
+    align_widths = False
+    trailing_spacer = spacer(0)
+    enabled << presenter.cells in RATEABLE_CELLS
+    Label:
+        text << 'Analysis Note for {}'.format(presenter.cells)
+    ObjectCombo:
+        items = [''] + list(UNRATABLE_REASONS)
+        to_string = lambda r: 'ratable' if r == '' else r
+        selected << presenter.obj.unratable.get(presenter.cells, '')
+        selected ::
+            presenter.action_set_unratable(selected)
+        tool_tip = 'Mark the selected cell row as unratable'
+
+
 def get_tile_di_title(unsaved_changes, obj):
     pre = '*' if unsaved_changes else ''
     if obj.frequency is not None:
@@ -302,11 +319,11 @@ enamldef TileDockItem(DockItem): dock_item:
         constraints = [
             vbox(
                 dc,
-                hbox(tool_label, mode_buttons, action_clear_spiral, action_clear_cells, spacer, spacing=0),
+                hbox(tool_label, mode_buttons, action_clear_spiral, action_clear_cells, spacer, unratable, spacing=0),
                 hbox(action_guess_cells, spacer, load_analysis, save_analysis, spacing=0),
                 canvas,
             ),
-            align('v_center', tool_label, mode_buttons, action_clear_spiral, action_clear_cells),
+            align('v_center', tool_label, mode_buttons, action_clear_spiral, action_clear_cells, unratable),
             align('left', tool_label, dc.children[0]),
             align('left', dc.children[1], mode_buttons),
         ]
@@ -363,6 +380,9 @@ enamldef TileDockItem(DockItem): dock_item:
         PBActionClearCells: action_clear_cells:
             presenter << dock_item.presenter
 
+        UnratableSelector: unratable:
+            presenter << dock_item.presenter
+
         ActionGuessCells: action_guess_cells:
             presenter << dock_item.presenter
 
@@ -385,7 +405,7 @@ enamldef CochleogramDockItem(DockItem): dock_item:
         constraints = [
             vbox(
                 hbox(dc, display_apply, highlight_selected),
-                hbox(tool_label, mode_buttons, spacer, load_analysis, save_analysis),
+                hbox(tool_label, mode_buttons, spacer, load_analysis, save_analysis, unratable),
                 hbox(action_label, action_auto_align_tiles,
                      action_clear_spiral, action_clear_cells,
                      action_simplify_exclusions, action_merge_ohc_exclusions,
@@ -395,7 +415,7 @@ enamldef CochleogramDockItem(DockItem): dock_item:
                 canvas,
             ),
             align('v_center', dc.children[0], display_apply, highlight_selected),
-            align('v_center', tool_label, mode_buttons),
+            align('v_center', tool_label, mode_buttons, unratable),
             align('v_center', action_label, action_auto_align_tiles,
                   action_clear_spiral, action_clear_cells,
                   action_simplify_exclusions, action_merge_ohc_exclusions),
@@ -462,6 +482,9 @@ enamldef CochleogramDockItem(DockItem): dock_item:
                     toggled ::
                         if self.checked:
                             presenter.tool = loop_item
+
+        UnratableSelector: unratable:
+            presenter << dock_item.presenter
 
         Label: action_label:
             text = 'Actions'

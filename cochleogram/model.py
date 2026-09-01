@@ -286,6 +286,10 @@ class CellAnalysis(NDImageCollection):
     spirals = Dict()
     cells = Dict()
 
+    #: Maps cell_type -> reason for rows that cannot be scored. Rows that are
+    #: ratable are simply absent from the dict.
+    unratable = Dict()
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.spirals = {c: Points() for c in CELLS}
@@ -313,6 +317,7 @@ class CellAnalysis(NDImageCollection):
         return {
             'spirals': {k: v.get_state() for k, v in self.spirals.items()},
             'cells': {k: v.get_state() for k, v in self.cells.items()},
+            'unratable': dict(self.unratable),
         }
 
     def set_state(self, state):
@@ -320,6 +325,7 @@ class CellAnalysis(NDImageCollection):
             v.set_state(state['spirals'][k])
         for k, v in self.cells.items():
             v.set_state(state['cells'][k])
+        self.unratable = dict(state.get('unratable', {}))
 
 
 class Piece(CellAnalysis):
