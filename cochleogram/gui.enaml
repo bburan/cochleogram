@@ -817,14 +817,17 @@ enamldef CochleogramWindow(MainWindow): window:
                     event.accept_proposed_action()
 
             drop => (event):
-                text = event.mime_data().data('text/uri-list').decode('utf-8')
-                filenames = []
-                for t in text.strip().split('\n'):
-                    t = urllib.parse.unquote(t).strip()
-                    fragments = urllib.parse.urlsplit(t)
-                    path = Path(urllib.request.url2pathname(fragments.path))
-                    filenames.append(path)
-                load_dataset(filenames[0], window)
+                try:
+                    text = event.mime_data().data('text/uri-list').decode('utf-8')
+                    filenames = []
+                    for t in text.strip().split('\n'):
+                        t = urllib.parse.unquote(t).strip()
+                        fragments = urllib.parse.urlsplit(t)
+                        path = Path(urllib.request.url2pathname(fragments.path))
+                        filenames.append(path)
+                    load_dataset(filenames[0], window)
+                except Exception as e:
+                    critical(window, 'Unable to load data', str(e))
 
             DockItem:
                 name = 'help'
