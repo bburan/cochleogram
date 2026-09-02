@@ -1,5 +1,7 @@
 # Cochleogram
 
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://bburan.github.io/cochleogram/)
+
 A GUI application for creating cochlear frequency maps and counting inner and outer hair cells from confocal microscopy images.
 
 ## What it does
