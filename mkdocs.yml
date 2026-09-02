@@ -1,0 +1,44 @@
+site_name: Cochleogram
+site_description: >
+  A GUI application for creating cochlear frequency maps and counting
+  inner and outer hair cells from confocal microscopy images.
+site_url: https://bburan.github.io/cochleogram/
+repo_url: https://github.com/bburan/cochleogram
+repo_name: bburan/cochleogram
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+nav:
+  - Home: index.md
+  - Installation: getting-started.md
+  - Frequency Map: frequency-map.md
+  - Cell Counting: cell-counting.md
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.keys
